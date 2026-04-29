@@ -1,0 +1,7 @@
+
+# auto-devops session temp files
+.devops/session/
+ISSUES_TODAY.md
+ISSUE_RESPONSE.md
+node_modules
+dist

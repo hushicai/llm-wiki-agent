@@ -146,8 +146,15 @@ export interface WikiLintResult {
 }
 
 // =====================
-// Agent Types
+// Delegate Tool Types
 // =====================
+
+export const WikiDelegateParams = Type.Object({
+  task: Type.String({ description: "任务描述，会作为 system prompt 注入给 sub-agent" }),
+  system_prompt: Type.Optional(Type.String({ description: "可选：自定义 system prompt，替代默认的" })),
+});
+
+export type WikiDelegateParamsType = Static<typeof WikiDelegateParams>;
 
 export interface WikiToolContext {
   wikiRoot: string;

@@ -6,6 +6,7 @@ import {
   createAgentSessionServices,
   SessionManager,
 } from "@mariozechner/pi-coding-agent";
+import type { ToolDefinition } from "@mariozechner/pi-agent-core";
 import { existsSync } from "fs";
 import { readFileSync } from "fs";
 import { join } from "path";
@@ -41,13 +42,27 @@ export class WikiAgent {
     }
   }
 
-  async createSession(wikiRoot: string) {
-    const wikiSlug = slugify(wikiRoot.split("/").pop() || "wiki");
+  async createSession(cwd: string, options?: { tools?: (string | ToolDefinition)[] }) {
+    // Filter tools into built-in and custom
+    const builtInTools: string[] = [];
+    const customToolsList: ToolDefinition[] = [];
+
+    if (options?.tools !== undefined) {
+      for (const tool of options.tools) {
+        if (typeof tool === "string") {
+          builtInTools.push(tool);
+        } else {
+          customToolsList.push(tool);
+        }
+      }
+    }
+
+    const wikiSlug = slugify(cwd.split("/").pop() || "wiki");
     const sessionDir = getSessionDir(wikiSlug);
-    const sessionManager = SessionManager.create(wikiRoot, sessionDir);
+    const sessionManager = SessionManager.create(cwd, sessionDir);
 
     const svc = await createAgentSessionServices({
-      cwd: wikiRoot,
+      cwd,
       agentDir: this.agentDir,
       resourceLoaderOptions: {
         noSkills: true,
@@ -78,10 +93,16 @@ export class WikiAgent {
           resourceLoader: svc.resourceLoader,
           modelRegistry: svc.modelRegistry,
           sessionManager,
+          ...(options?.tools !== undefined && {
+            // pi-mono's `tools` parameter is a global allowlist that filters
+            // BOTH built-in and custom tools. Include custom tool names too.
+            tools: [...builtInTools, ...customToolsList.map((t) => t.name)],
+            ...(customToolsList.length > 0 && { customTools: customToolsList }),
+          }),
         });
         return { ...result, services: svc, diagnostics: svc.diagnostics };
       },
-      { cwd: wikiRoot, agentDir: this.agentDir, sessionManager },
+      { cwd, agentDir: this.agentDir, sessionManager },
     );
 
     return runtime;

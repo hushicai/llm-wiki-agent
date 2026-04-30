@@ -2,6 +2,7 @@
 // CLI entry point — wiki agent
 import { InteractiveMode } from "@mariozechner/pi-coding-agent";
 import { WikiAgent } from "./core/agent.js";
+import { createWikiTools } from "./tools/index.js";
 import { ensureWiki } from "./core/init.js";
 
 function printHelp(): void {
@@ -71,7 +72,7 @@ async function main(): Promise<void> {
 
   // Create agent and session
   const agent = new WikiAgent();
-  const runtime = await agent.createSession(wikiRoot);
+  const runtime = await agent.createSession(wikiRoot, { tools: createWikiTools(wikiRoot) });
 
   if (pipedQuery) {
     // PrintMode: piped query via AgentSession

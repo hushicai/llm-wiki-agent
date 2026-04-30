@@ -1,6 +1,7 @@
 // src/server/session.ts — Web session manager for llm-wiki-agent
 // Manages multiple concurrent agent sessions with auto-cleanup.
 import type { WikiAgent } from "../core/agent.js";
+import { createWikiTools } from "../tools/index.js";
 
 interface SessionEntry {
   runtime: any; // AgentSessionRuntime
@@ -22,7 +23,7 @@ export class WebSessionManager {
     wikiRoot: string,
   ): Promise<{ id: string; runtime: any }> {
     const id = crypto.randomUUID();
-    const runtime = await agent.createSession(wikiRoot);
+    const runtime = await agent.createSession(wikiRoot, { tools: createWikiTools(wikiRoot) });
     const now = Date.now();
     this.sessions.set(id, { runtime, createdAt: now, lastActivity: now });
     return { id, runtime };

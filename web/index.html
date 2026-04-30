@@ -60,7 +60,7 @@ body {
   <select id="model-select"><option value="">Loading models...</option></select>
 </div>
 <div id="messages">
-  <div class="loading"><span class="spinner"></span>Connecting...</div>
+  <div class="msg assistant" style="opacity:0.7">输入消息开始与 wiki 交互</div>
 </div>
 <div class="input-area">
   <textarea id="input" placeholder="Type a message..." rows="1"></textarea>
@@ -115,10 +115,6 @@ async function sendMessage() {
   inputEl.style.height = 'auto';
   loading = true;
   sendBtn.disabled = true;
-
-  // Remove loading indicator
-  const loadingEl = messagesEl.querySelector('.loading');
-  if (loadingEl) loadingEl.remove();
 
   // Add user message
   addMessage(text, 'user');

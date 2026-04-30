@@ -165,14 +165,6 @@ async function main() {
           });
         }
 
-        // GET /api/models
-        if (url.pathname === "/api/models" && req.method === "GET") {
-          const models = agent.getModels();
-          return new Response(JSON.stringify({ models }), {
-            headers: { "Content-Type": "application/json" },
-          });
-        }
-
         // Static files
         const filePath =
           url.pathname === "/" ? "/index.html" : url.pathname;

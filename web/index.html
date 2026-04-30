@@ -57,7 +57,6 @@ body {
 <body>
 <div class="header">
   <h1>llm-wiki-agent</h1>
-  <select id="model-select"><option value="">Loading models...</option></select>
 </div>
 <div id="messages">
   <div class="msg assistant" style="opacity:0.7">输入消息开始与 wiki 交互</div>
@@ -76,29 +75,6 @@ let loading = false;
 const messagesEl = document.getElementById('messages');
 const inputEl = document.getElementById('input');
 const sendBtn = document.getElementById('send-btn');
-const modelSelect = document.getElementById('model-select');
-
-// Load models
-async function loadModels() {
-  try {
-    const res = await fetch('/api/models');
-    const data = await res.json();
-    modelSelect.innerHTML = '';
-    if (data.models && data.models.length > 0) {
-      data.models.forEach(m => {
-        const opt = document.createElement('option');
-        opt.value = `${m.provider}/${m.id}`;
-        opt.textContent = `${m.provider}/${m.id}`;
-        modelSelect.appendChild(opt);
-      });
-    } else {
-      modelSelect.innerHTML = '<option value="">No models available</option>';
-    }
-  } catch {
-    modelSelect.innerHTML = '<option value="">Failed to load models</option>';
-  }
-}
-loadModels();
 
 // Auto-resize textarea
 inputEl.addEventListener('input', () => {

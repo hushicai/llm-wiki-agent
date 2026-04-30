@@ -66,13 +66,6 @@ function startTestServer(port: number) {
           });
         }
 
-        // GET /api/models
-        if (url.pathname === "/api/models") {
-          return new Response(JSON.stringify({ models: agent.getModels() }), {
-            headers: { "Content-Type": "application/json" },
-          });
-        }
-
         // Static file
         if (url.pathname === "/" || url.pathname === "/index.html") {
           const content = await Bun.file(join(webDir, "index.html")).text();
@@ -120,14 +113,6 @@ describe("HTTP Server", () => {
     expect(res.status).toBe(200);
     const text = await res.text();
     expect(text).toContain("Test Wiki");
-  });
-
-  test("GET /api/models returns JSON", async () => {
-    const res = await fetch(`http://localhost:${port}/api/models`);
-    expect(res.status).toBe(200);
-    const data = await res.json();
-    expect(data).toHaveProperty("models");
-    expect(Array.isArray(data.models)).toBe(true);
   });
 
   test("POST /api/chat without message returns 400", async () => {

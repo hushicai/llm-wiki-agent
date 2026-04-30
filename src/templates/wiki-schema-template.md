@@ -13,15 +13,13 @@
 
 ## 可用技能
 
-当前注册的技能（详细步骤在 `~/.llm-wiki-agent/skills/` 下对应 SKILL.md 中）：
-
 | 技能 | 用途 | 触发词 |
 |------|------|--------|
 | wiki-ingest | 录入源文件到 wiki | "录入"、"添加到 wiki"、"处理这个文件" |
 | wiki-query | 查询 wiki 知识并回答 | "查一下"、"关于 X 我知道什么"、"搜索" |
 | wiki-lint | 健康检查 | "检查 wiki"、"lint"、"清理"、"健康检查" |
 
-**底层工具**：`read_file`、`write_file`、`search_files`、`patch` 可用于辅助操作（检查文件是否存在、读取 index.md 等）。优先使用技能定义的工作流。
+**底层工具**：`read_file`、`write_file`、`search_files`、`patch` 可用于辅助操作。优先使用技能定义的工作流。
 
 ## 工作流
 

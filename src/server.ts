@@ -193,7 +193,7 @@ async function main() {
     },
   });
 
-  console.error(`llm-wiki-agent server running at http://${host}:${port}`);
+  console.error(`llm-wiki-agent server running at http://localhost:${port}`);
   console.error(`Wiki root: ${wikiRoot}`);
 }
 

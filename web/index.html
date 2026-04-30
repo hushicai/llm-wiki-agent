@@ -44,6 +44,21 @@ body {
   50% { content: '..'; }
   75% { content: '...'; }
 }
+.msg.tool-block {
+  background: #1a1a2e; border: 1px solid #0f3460;
+  align-self: flex-start; font-size: 12px; color: #888;
+  padding: 0; overflow: hidden;
+}
+.tool-header {
+  padding: 8px 12px; cursor: pointer; user-select: none;
+  display: flex; align-items: center; gap: 6px;
+}
+.tool-header:hover { background: #222; }
+.tool-toggle { font-size: 10px; transition: transform 0.2s; }
+.tool-toggle.collapsed { transform: rotate(-90deg); }
+.tool-body { padding: 0 12px 8px; }
+.tool-line { padding: 2px 0; }
+.tool-body.collapsed { display: none; }
 .msg code { background: #111; padding: 2px 6px; border-radius: 4px; font-size: 13px; }
 .msg pre { background: #111; padding: 12px; border-radius: 8px; overflow-x: auto; margin: 8px 0; }
 .msg pre code { background: none; padding: 0; }
@@ -92,181 +107,7 @@ body {
   <button id="send-btn" disabled>Send</button>
 </div>
 
-<script>
-// State
-let sessionId = null;
-let currentAssistantMsg = null;
-let currentRawText = ''; // raw markdown buffer for streaming
-let loading = false;
-
-const messagesEl = document.getElementById('messages');
-const inputEl = document.getElementById('input');
-const sendBtn = document.getElementById('send-btn');
-
-// Auto-resize textarea
-inputEl.addEventListener('input', () => {
-  inputEl.style.height = 'auto';
-  inputEl.style.height = Math.min(inputEl.scrollHeight, 120) + 'px';
-});
-
-// Send message
-async function sendMessage() {
-  const text = inputEl.value.trim();
-  if (!text || loading) return;
-
-  inputEl.value = '';
-  inputEl.style.height = 'auto';
-  loading = true;
-  sendBtn.disabled = true;
-
-  // Add user message
-  addMessage(text, 'user');
-
-  // Show thinking placeholder for tool calls
-  currentAssistantMsg = addMessage('', 'assistant');
-  const thinkingDiv = document.createElement('div');
-  thinkingDiv.className = 'thinking visible';
-  const header = document.createElement('div');
-  header.className = 'thinking-header';
-  header.innerHTML = '<span class="spinner"></span>思考中<span class="dots"></span>';
-  thinkingDiv.appendChild(header);
-  currentAssistantMsg.appendChild(thinkingDiv);
-
-  try {
-    const res = await fetch('/api/chat', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message: text, session_id: sessionId }),
-    });
-
-    if (!res.ok) {
-      const err = await res.json();
-      currentAssistantMsg.innerHTML = `<strong>Error:</strong> ${err.error}`;
-      loading = false;
-      sendBtn.disabled = false;
-      return;
-    }
-
-    const reader = res.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = '';
-
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split('\n\n');
-      buffer = lines.pop() || '';
-
-      for (const line of lines) {
-        if (!line.startsWith('data: ')) continue;
-        try {
-          const data = JSON.parse(line.slice(6));
-          handleSSEEvent(data);
-        } catch { /* skip malformed */ }
-      }
-    }
-  } catch (err) {
-    currentAssistantMsg.innerHTML = `<strong>Error:</strong> ${err.message}`;
-  }
-
-  loading = false;
-  sendBtn.disabled = false;
-  inputEl.focus();
-}
-
-function handleSSEEvent(data) {
-  switch (data.type) {
-    case 'session_id':
-      sessionId = data.id;
-      break;
-    case 'delta':
-      if (currentAssistantMsg) {
-        // Remove thinking indicator on first delta
-        const thinking = currentAssistantMsg.querySelector('.thinking');
-        if (thinking) thinking.remove();
-        appendContent(currentAssistantMsg, data.content);
-      }
-      break;
-    case 'tool':
-      addToolCall(data.name, data.args);
-      break;
-    case 'tool_result':
-      // Could update tool call status
-      break;
-    case 'end':
-      sessionId = data.session_id || sessionId;
-      break;
-    case 'error':
-      if (currentAssistantMsg) {
-        currentAssistantMsg.innerHTML += `<br><strong>Error:</strong> ${data.message}`;
-      }
-      break;
-  }
-}
-
-function addMessage(text, type) {
-  const el = document.createElement('div');
-  el.className = `msg ${type}`;
-  if (text) {
-    if (type === 'assistant') {
-      currentRawText = text;
-      el.innerHTML = renderMarkdown(text);
-    } else {
-      el.textContent = text;
-    }
-  }
-  messagesEl.appendChild(el);
-  messagesEl.scrollTop = messagesEl.scrollHeight;
-  return el;
-}
-
-function addToolCall(name, args) {
-  const thinking = currentAssistantMsg?.querySelector('.thinking');
-  if (!thinking) return;
-  // On first tool call, remove the spinner + "思考中..." header
-  const header = thinking.querySelector('.thinking-header');
-  if (header) header.remove();
-  const argsStr = typeof args === 'object' ? JSON.stringify(args).slice(0, 120) : String(args).slice(0, 120);
-  const line = document.createElement('div');
-  line.style.padding = '2px 0';
-  line.innerHTML = `🔧 <strong>${name}</strong> ${escapeHtml(argsStr)}`;
-  thinking.appendChild(line);
-  messagesEl.scrollTop = messagesEl.scrollHeight;
-}
-
-function appendContent(el, text) {
-  // Accumulate raw markdown, re-render from scratch each time
-  currentRawText += text;
-  el.innerHTML = renderMarkdown(currentRawText);
-  messagesEl.scrollTop = messagesEl.scrollHeight;
-}
-
-function renderMarkdown(text) {
-  // Use marked.js for full GFM support
-  return marked.parse(text, { breaks: true, gfm: true });
-}
-
-function escapeHtml(str) {
-  const div = document.createElement('div');
-  div.textContent = str;
-  return div.innerHTML;
-}
-
-// Enter to send, Shift+Enter for newline
-inputEl.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter' && !e.shiftKey) {
-    e.preventDefault();
-    sendMessage();
-  }
-});
-
-sendBtn.addEventListener('click', sendMessage);
-
-// Enable send after load
-sendBtn.disabled = false;
-inputEl.focus();
-</script>
+<script src="js/render.js"></script>
+<script src="js/app.js"></script>
 </body>
 </html>

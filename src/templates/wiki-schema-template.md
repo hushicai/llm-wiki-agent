@@ -19,28 +19,14 @@
 | wiki-query | 查询 wiki 知识并回答 | "查一下"、"关于 X 我知道什么"、"搜索" |
 | wiki-lint | 健康检查 | "检查 wiki"、"lint"、"清理"、"健康检查" |
 
-**底层工具**：`read_file`、`write_file`、`search_files`、`patch` 可用于辅助操作。优先使用技能定义的工作流。
 
 ## 工作流
 
-### 录入（ingest）
-1. 用 `read_file` 或 `cat` 读取 raw/ 下的源文件
-2. 提取关键信息
-3. 用 `write_file` 创建 wiki 页面（带 frontmatter）
-4. 更新相关页面（添加 wikilink 引用）
-5. 追加操作记录到 log.md
+- **录入** → 调用 wiki-ingest 技能处理源文件
+- **查询** → 调用 wiki-query 技能搜索并回答
+- **健康检查** → 调用 wiki-lint 技能检查并修复
 
-### 查询（query）
-1. 用 `search_files` 搜索 wiki 中相关内容
-2. 用 `read_file` 精读最相关的页面
-3. 综合回答，注明来源（文件路径或条目名）
-4. wiki 中无相关信息时，明确告知"wiki 中未找到相关信息"
-
-### 健康检查（lint）
-1. 运行 wiki-lint 技能
-2. 检查 orphan page、broken wikilink、空目录
-3. 自动修复可修复的问题
-4. 追加操作记录到 log.md
+每次操作后，在 log.md 中追加记录。
 
 ## 页面格式
 

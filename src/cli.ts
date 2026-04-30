@@ -2,28 +2,26 @@
 // CLI entry point — wiki agent
 import { InteractiveMode } from "@mariozechner/pi-coding-agent";
 import { createWikiSession } from "./runtime.js";
-import { initWiki, isWikiInitialized } from "./init.js";
-import { existsSync } from "fs";
+import { ensureWiki } from "./init.js";
 
 function printHelp(): void {
   console.log(`
 llm-wiki-agent — Wiki Knowledge Agent CLI
 
 Usage:
-  wiki --wiki <path> [query]    Run query or start interactive mode
-  wiki --wiki <path> --init     Initialize wiki
-  wiki --version                Show version
-  wiki --help                   Show this help
+  llm-wiki-agent --wiki <path>        Interactive mode (auto-inits if needed)
+  echo "query" | llm-wiki-agent --wiki <path>   Pipeline query
+  llm-wiki-agent --version            Show version
+  llm-wiki-agent --help               Show this help
 
 Options:
   --wiki, -w <path>     Wiki root directory (required)
-  --init, -i            Initialize wiki if not exists
   --version             Show version
   --help                Show this help
 
 Examples:
-  wiki --wiki ./my-wiki "What is React?"
-  wiki --wiki ./research --init
+  llm-wiki-agent --wiki ./my-wiki
+  echo "What is React?" | llm-wiki-agent --wiki ./research
 `);
 }
 
@@ -55,45 +53,31 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
-  // Handle --init
-  if (args.includes("--init") || args.includes("-i")) {
-    if (!existsSync(wikiRoot)) {
-      await initWiki(wikiRoot);
-      console.log(`Wiki initialized at: ${wikiRoot}`);
-    } else if (!(await isWikiInitialized(wikiRoot))) {
-      await initWiki(wikiRoot);
-      console.log(`Wiki initialized at: ${wikiRoot}`);
-    } else {
-      console.log(`Wiki already initialized at: ${wikiRoot}`);
+  // Self-healing: ensure all required files/dirs exist
+  const { created } = await ensureWiki(wikiRoot);
+  if (created.length > 0) {
+    console.error(`Wiki ready at: ${wikiRoot}`);
+  }
+
+  // Read piped stdin for query
+  let pipedQuery: string | undefined;
+  if (!process.stdin.isTTY) {
+    const chunks: Buffer[] = [];
+    for await (const chunk of process.stdin) {
+      chunks.push(Buffer.from(chunk));
     }
-    return;
+    pipedQuery = Buffer.concat(chunks).toString("utf-8").trim();
   }
-
-  // Ensure wiki is initialized
-  if (!existsSync(wikiRoot) || !(await isWikiInitialized(wikiRoot))) {
-    console.error(`Error: Wiki not found or not initialized at: ${wikiRoot}`);
-    console.error("Use --init to create one.");
-    process.exit(1);
-  }
-
-  // Extract query from positional args
-  const positionalArgs = args.filter(
-    (a) => !a.startsWith("-") && a !== wikiRoot
-  );
-  const query = positionalArgs.join(" ");
 
   // Create wiki session runtime
   const runtime = await createWikiSession({ wikiRoot });
 
-  if (query) {
-    // PrintMode: single query via AgentSession (supports tools)
+  if (pipedQuery) {
+    // PrintMode: piped query via AgentSession
     const session = runtime.session;
-    await session.prompt(query);
-
-    // Wait briefly for agent to finish
+    await session.prompt(pipedQuery);
     await new Promise(r => setTimeout(r, 1000));
 
-    // Extract and print response text
     const messages = session.state.messages;
     for (const msg of messages) {
       if (msg.role === "assistant" && Array.isArray(msg.content)) {

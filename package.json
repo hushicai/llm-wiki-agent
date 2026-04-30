@@ -3,14 +3,18 @@
   "version": "0.1.0",
   "type": "module",
   "dependencies": {
-    "@mariozechner/pi-coding-agent": "^0.70.5",
     "@mariozechner/pi-ai": "^0.70.5",
+    "@mariozechner/pi-coding-agent": "^0.70.5",
+    "fast-glob": "^3.3.3",
     "typebox": "^1.1.24",
     "yaml": "^2.5.0"
   },
   "devDependencies": {
     "@types/bun": "latest",
     "typescript": "^5.5.0"
+  },
+  "bin": {
+    "llm-wiki-agent": "src/cli.ts"
   },
   "scripts": {
     "start": "bun run src/cli.ts",

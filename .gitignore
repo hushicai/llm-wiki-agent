@@ -5,3 +5,4 @@ ISSUES_TODAY.md
 ISSUE_RESPONSE.md
 node_modules
 dist
+.venv

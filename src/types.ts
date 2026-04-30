@@ -86,7 +86,8 @@ export const WikiListParams = Type.Object({
 export type WikiListParamsType = Static<typeof WikiListParams>;
 
 export const WikiIngestParams = Type.Object({
-  source_path: Type.String({ description: "raw/ 下的文件路径" }),
+  source_path: Type.Optional(Type.String({ description: "raw/ 下的文件路径" })),
+  file_path: Type.Optional(Type.String({ description: "直接文件路径（绝对或相对 cwd），覆盖 source_path" })),
   options: Type.Optional(Type.Object({
     force: Type.Optional(Type.Boolean({ description: "强制重新 ingest" })),
     tier: Type.Optional(Type.Union([Type.Literal("working"), Type.Literal("episodic"), Type.Literal("semantic")], { description: "v2: consolidation tier" })),

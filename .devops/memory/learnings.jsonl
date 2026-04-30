@@ -1,1 +1,0 @@
-{"type": "lesson", "session": 6, "ts": "2026-04-28T18:12Z", "source": "evolve", "title": "测试先行 + 源码验证", "context": "Task 1 修复测试框架，Task 2-3 先写测试再实现功能。pi-ai 需要从源码 (pi-mono) 验证 API，而非猜测。", "takeaway": "每个功能先写失败测试，验证测试失败后再实现。pi-ai/getModel 需要KnownProvider + 正确模型 ID（如 claude-3-5-sonnet-20241022 非 claude-sonnet-4）"}

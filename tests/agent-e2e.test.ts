@@ -1,128 +1,150 @@
+// End-to-end tests for llm-wiki-agent
+// Tests the public API: ensureWiki() and createWikiSession()
 import { describe, expect, test, beforeAll, afterAll } from "bun:test";
-import { mkdir, rm } from "fs/promises";
+import { mkdir, rm, writeFile } from "fs/promises";
 import { join } from "path";
 import { tmpdir } from "os";
-import { Agent } from "@mariozechner/pi-agent-core";
-import type { AgentTool } from "@mariozechner/pi-agent-core";
-import { registerFauxProvider, fauxAssistantMessage, fauxToolCall, fauxText, type Tool } from "@mariozechner/pi-ai";
-import { Type } from "typebox";
+import { ensureWiki } from "../src/init.js";
+import { createWikiSession } from "../src/runtime.js";
 
-describe("Agent Tool Integration", () => {
-  const testDir = join(tmpdir(), "llm-wiki-agent-agent-test");
-  let faux: ReturnType<typeof registerFauxProvider>;
-
-  // Create a test tool with proper TypeBox schema
-  function createTestTool(name: string): AgentTool {
-    return {
-      name,
-      label: `Test ${name}`,
-      description: `Test tool for ${name}`,
-      parameters: Type.Object({
-        input: Type.String(),
-      }),
-      execute: async (id, params) => {
-        return {
-          content: [{ type: "text", text: `Executed ${name}` }],
-          details: { name, input: (params as any).input },
-        };
-      },
-    };
-  }
+describe("llm-wiki-agent e2e", () => {
+  const testDir = join(tmpdir(), "llm-wiki-agent-e2e-test");
+  const wikiRoot = join(testDir, "my-wiki");
 
   beforeAll(async () => {
+    await rm(testDir, { recursive: true, force: true });
     await mkdir(testDir, { recursive: true });
-    faux = registerFauxProvider({ provider: "faux", api: "faux" });
   });
 
   afterAll(async () => {
     await rm(testDir, { recursive: true, force: true });
-    faux.unregister();
   });
 
-  test("agent initializes with tools", () => {
-    const tool = createTestTool("test");
-    
-    const agent = new Agent({
-      initialState: {
-        systemPrompt: "Test",
-        model: faux.getModel("faux-1")!,
-        thinkingLevel: "off",
-        tools: [tool],
-      },
+  describe("wiki initialization", () => {
+    test("ensureWiki creates directory structure", async () => {
+      const { created } = await ensureWiki(wikiRoot);
+
+      // Root directory
+      expect(created).toContain(wikiRoot);
+
+      // Required subdirectories
+      expect(created).toContain(join(wikiRoot, "raw"));
+      expect(created).toContain(join(wikiRoot, "wiki"));
+
+      // Required files
+      expect(created).toContain(join(wikiRoot, ".wikiconfig.yaml"));
+      expect(created).toContain(join(wikiRoot, "AGENTS.md"));
+      expect(created).toContain(join(wikiRoot, "index.md"));
+      expect(created).toContain(join(wikiRoot, "log.md"));
     });
 
-    expect(agent.state.tools).toHaveLength(1);
-    expect(agent.state.tools[0].name).toBe("test");
+    test("ensureWiki is idempotent", async () => {
+      const { created } = await ensureWiki(wikiRoot);
+      // Second call should create nothing
+      expect(created.length).toBe(0);
+    });
+
+    test("wiki has valid AGENTS.md", async () => {
+      const { readFile } = await import("fs/promises");
+      const content = await readFile(join(wikiRoot, "AGENTS.md"), "utf-8");
+      expect(content).toContain("wiki_search");
+      expect(content).toContain("wiki_write");
+      expect(content).toContain("wiki_lint");
+    });
   });
 
-  test("faux provider returns responses", async () => {
-    faux.setResponses([
-      fauxAssistantMessage({
-        content: [fauxText("Hello from faux")],
-        stopReason: "stop",
-      }),
-    ]);
-
-    const agent = new Agent({
-      initialState: {
-        systemPrompt: "Test",
-        model: faux.getModel("faux-1")!,
-        thinkingLevel: "off",
-        tools: [],
-      },
+  describe("session creation", () => {
+    test("createWikiSession returns valid runtime", async () => {
+      const runtime = await createWikiSession({ wikiRoot });
+      expect(runtime).toBeDefined();
+      expect(runtime.session).toBeDefined();
+      expect(runtime.services).toBeDefined();
+      await runtime.dispose();
     });
 
-    const events: string[] = [];
-    agent.subscribe((event) => {
-      events.push(event.type);
+    test("session has 5 custom wiki tools only (no native tools)", async () => {
+      const runtime = await createWikiSession({ wikiRoot });
+      const tools = runtime.session.state.tools;
+      const names = tools.map((t: { name: string }) => t.name).sort();
+      expect(names).toContain("wiki_search");
+      expect(names).toContain("wiki_write");
+      expect(names).toContain("wiki_lint");
+      expect(names).toContain("wiki_read");
+      expect(names).toContain("wiki_list");
+      expect(tools.length).toBe(5);
+      await runtime.dispose();
     });
 
-    await agent.prompt("Hello");
-    await agent.waitForIdle();
+    test("session has no native bash tool", async () => {
+      const runtime = await createWikiSession({ wikiRoot });
+      const tools = runtime.session.state.tools;
+      const toolNames = tools.map((t: { name: string }) => t.name);
+      // Native tools should NOT be available
+      expect(toolNames).not.toContain("bash");
+      await runtime.dispose();
+    });
 
-    expect(events).toContain("agent_start");
-    expect(events).toContain("agent_end");
+    test("services have modelRegistry and diagnostics", async () => {
+      const runtime = await createWikiSession({ wikiRoot });
+      expect(runtime.services.modelRegistry).toBeDefined();
+      expect(runtime.diagnostics).toBeDefined();
+      await runtime.dispose();
+    });
+
+    test("multiple sessions can be created independently", async () => {
+      const runtime1 = await createWikiSession({ wikiRoot });
+      const runtime2 = await createWikiSession({ wikiRoot });
+
+      expect(runtime1.session).not.toBe(runtime2.session);
+      expect(runtime1.session.state.tools.length).toBeGreaterThan(3);
+      expect(runtime2.session.state.tools.length).toBeGreaterThan(3);
+
+      await runtime1.dispose();
+      await runtime2.dispose();
+    });
   });
 
-  test.skip("agent executes tool call - requires full harness setup", async () => {
-    // This test requires the full test harness from pi-coding-agent
-    // which provides proper faux stream function setup.
-    // See: packages/coding-agent/test/test-harness.ts
-    const tool = createTestTool("echo");
-    
-    faux.setResponses([
-      fauxAssistantMessage({
-        content: [
-          fauxToolCall("echo", { input: "test" }, { id: "call-1" }),
-        ],
-        stopReason: "toolUse",
-      }),
-      fauxAssistantMessage({
-        content: [fauxText("Done")],
-        stopReason: "stop",
-      }),
-    ]);
+  describe("wiki tools execute correctly", () => {
+    test("wiki_write creates a page", async () => {
+      const runtime = await createWikiSession({ wikiRoot });
+      const writeTool = runtime.session.state.tools.find(
+        (t: { name: string }) => t.name === "wiki_write",
+      )!;
 
-    const agent = new Agent({
-      initialState: {
-        systemPrompt: "Use tools",
-        model: faux.getModel("faux-1")!,
-        thinkingLevel: "off",
-        tools: [tool],
-      },
+      const result = await writeTool.execute("call-write-1", {
+        path: "test-page.md",
+        content: "# Test Page\nContent created by e2e test.",
+      });
+
+      expect(result.content[0].text).toContain("Written");
+
+      const fileContent = await Bun.file(
+        join(wikiRoot, "wiki/test-page.md"),
+      ).text();
+      expect(fileContent).toContain("Test Page");
+      await runtime.dispose();
     });
 
-    const toolEvents: string[] = [];
-    agent.subscribe((event) => {
-      if (event.type.startsWith("tool_")) {
-        toolEvents.push(event.type);
-      }
+    test("wiki_lint reports issues for empty wiki", async () => {
+      const runtime = await createWikiSession({ wikiRoot });
+      const lintTool = runtime.session.state.tools.find(
+        (t: { name: string }) => t.name === "wiki_lint",
+      )!;
+
+      const result = await lintTool.execute("call-lint-1", {});
+      const text = result.content[0].text;
+
+      // Should report something (either healthy or issues)
+      expect(text).toBeDefined();
+      expect(text.length).toBeGreaterThan(0);
+      await runtime.dispose();
     });
+  });
 
-    await agent.prompt("Run echo with test");
-    await agent.waitForIdle();
-
-    // This will fail without proper harness - see test-harness.ts for correct setup
-    expect(toolEvents).toContain("tool_execution_end");
+  describe("cleanup", () => {
+    test("dispose does not throw", async () => {
+      const runtime = await createWikiSession({ wikiRoot });
+      await expect(runtime.dispose()).resolves.toBeUndefined();
+    });
   });
 });

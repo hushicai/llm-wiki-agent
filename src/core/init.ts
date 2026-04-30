@@ -49,7 +49,7 @@ async function generateAgentsMd(wikiRoot: string, wikiName: string): Promise<str
   const dirs = await getContentDirs(wikiRoot);
   const structure = buildStructureDiagram(dirs);
 
-  const templatePath = new URL("templates/wiki-schema-template.md", import.meta.url).pathname;
+  const templatePath = new URL("../templates/wiki-schema-template.md", import.meta.url).pathname;
   const template = await readFile(templatePath, "utf-8");
 
   return template

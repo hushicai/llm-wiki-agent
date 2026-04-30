@@ -5,7 +5,7 @@ import { readdir, readFile, writeFile, mkdir, appendFile } from "fs/promises";
 import { join, relative } from "path";
 import { existsSync } from "fs";
 import type { ToolDefinition } from "@mariozechner/pi-coding-agent";
-import { parseFrontmatter } from "../frontmatter.js";
+import { parseFrontmatter } from "../core/frontmatter.js";
 
 /** Match [[Page Name]] or [[Page Name|display text]] wikilinks */
 const WIKILINK_RE = /\[\[([^\]|]+)(?:\|[^\]]+)?\]\]/g;

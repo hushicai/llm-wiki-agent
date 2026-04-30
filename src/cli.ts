@@ -1,8 +1,8 @@
 #!/usr/bin/env bun
 // CLI entry point — wiki agent
 import { InteractiveMode } from "@mariozechner/pi-coding-agent";
-import { createWikiSession } from "./runtime.js";
-import { ensureWiki } from "./init.js";
+import { WikiAgent } from "./core/agent.js";
+import { ensureWiki } from "./core/init.js";
 
 function printHelp(): void {
   console.log(`
@@ -69,8 +69,9 @@ async function main(): Promise<void> {
     pipedQuery = Buffer.concat(chunks).toString("utf-8").trim();
   }
 
-  // Create wiki session runtime
-  const runtime = await createWikiSession({ wikiRoot });
+  // Create agent and session
+  const agent = new WikiAgent();
+  const runtime = await agent.createSession(wikiRoot);
 
   if (pipedQuery) {
     // PrintMode: piped query via AgentSession
@@ -95,6 +96,8 @@ async function main(): Promise<void> {
     const mode = new InteractiveMode(runtime);
     await mode.run();
   }
+
+  await agent.dispose();
 }
 
 main().catch((err) => {

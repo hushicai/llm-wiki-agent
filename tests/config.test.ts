@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { getAgentDir, getSessionDir, getModelsPath, getAuthPath, getSettingsPath, slugify } from "../src/config.js";
+import { getAgentDir, getSessionDir, getModelsPath, getAuthPath, getSettingsPath, slugify } from "../src/core/config.js";
 
 describe("Config", () => {
   describe("getAgentDir", () => {

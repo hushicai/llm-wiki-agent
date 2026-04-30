@@ -115,7 +115,7 @@ export async function createWikiSession(options: WikiSessionOptions) {
   // const wikiTools: ToolDefinition[] = createWikiTools({ wikiRoot });
 
   // Load system prompt from template
-  const promptPath = new URL("templates/system-prompt-template.md", import.meta.url).pathname;
+  const promptPath = new URL("../templates/system-prompt-template.md", import.meta.url).pathname;
   const promptContent = await readFile(promptPath, "utf-8");
   const appendSystemPrompt = ["", ...promptContent.split("\n"), ""];
 

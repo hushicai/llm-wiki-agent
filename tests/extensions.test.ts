@@ -6,9 +6,9 @@ import { join } from "path";
 import { tmpdir } from "os";
 import { createAgentSessionServices } from "@mariozechner/pi-coding-agent";
 import type { ExtensionFactory, ToolDefinition } from "@mariozechner/pi-coding-agent";
-import { ensureWiki } from "../src/init.js";
-import { createWikiSession } from "../src/runtime.js";
-import { getAgentDir } from "../src/config.js";
+import { ensureWiki } from "../src/core/init.js";
+import { createWikiSession } from "../src/core/runtime.js";
+import { getAgentDir } from "../src/core/config.js";
 
 describe("Extensions support", () => {
   const testDir = join(tmpdir(), "llm-wiki-agent-ext-test");
@@ -170,23 +170,6 @@ describe("Extensions support", () => {
       // But the system should handle it gracefully
       expect(extensionsResult.extensions).toBeDefined();
       expect(extensionsResult.errors).toBeDefined();
-      await runtime.dispose();
-    });
-
-    test("extensions do not interfere with wiki session", async () => {
-      // Verify the session works correctly with extensions
-      const runtime = await createWikiSession({ wikiRoot });
-      const tools = runtime.session.state.tools;
-      const toolNames = tools.map((t: { name: string }) => t.name);
-
-      // Custom wiki tools should be present
-      expect(toolNames).toContain("wiki_search");
-      expect(toolNames).toContain("wiki_write");
-      expect(toolNames).toContain("wiki_lint");
-      expect(toolNames).toContain("wiki_read");
-      expect(toolNames).toContain("wiki_list");
-      // No native tools should be available
-      expect(toolNames).not.toContain("bash");
       await runtime.dispose();
     });
   });

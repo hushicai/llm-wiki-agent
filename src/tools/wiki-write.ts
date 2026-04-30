@@ -11,7 +11,7 @@ import {
   mergeFrontmatter,
   stripFrontmatter,
   type WikiFrontmatter,
-} from "../frontmatter.js";
+} from "../core/frontmatter.js";
 
 function todayISO(): string {
   return new Date().toISOString().split("T")[0];

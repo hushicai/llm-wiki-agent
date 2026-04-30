@@ -1,6 +1,6 @@
 // Frontmatter utility tests
 import { describe, expect, test } from "bun:test";
-import { parseFrontmatter, stripFrontmatter, formatFrontmatter, mergeFrontmatter } from "../src/frontmatter.js";
+import { parseFrontmatter, stripFrontmatter, formatFrontmatter, mergeFrontmatter } from "../src/core/frontmatter.js";
 
 describe("parseFrontmatter", () => {
   test("parses YAML frontmatter with --- delimiters", () => {

@@ -77,8 +77,11 @@ async function sendMessage() {
         if (!line.startsWith('data: ')) continue;
         try {
           const data = JSON.parse(line.slice(6));
+          console.log('[SSE]', data.type, data.type === 'tool' ? data.name : '');
           handleSSEEvent(data);
-        } catch { /* skip malformed */ }
+        } catch (e) {
+          console.warn('[SSE] parse error:', e.message, line.slice(0, 80));
+        }
       }
     }
   } catch (err) {

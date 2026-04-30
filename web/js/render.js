@@ -18,6 +18,7 @@ function addMessage(text, type) {
 }
 
 function addToolCall(name, args) {
+  console.log('[addToolCall]', name, args, 'currentAssistantMsg:', !!currentAssistantMsg, 'currentToolBlock:', !!currentToolBlock);
   // Remove thinking area if it still exists
   const thinking = currentAssistantMsg?.querySelector('.thinking');
   if (thinking) thinking.remove();
@@ -38,6 +39,7 @@ function addToolCall(name, args) {
       </div>`;
     toolCallCount = 1;
     messagesEl.insertBefore(currentToolBlock, currentAssistantMsg);
+    console.log('[addToolCall] created block, children:', messagesEl.children.length, 'inserted before:', currentAssistantMsg?.className);
   } else {
     // Subsequent tool calls: append to existing block
     toolCallCount++;
@@ -64,6 +66,7 @@ function appendContent(el, text) {
   // Accumulate raw markdown, re-render from scratch each time
   currentRawText += text;
   el.innerHTML = renderMarkdown(currentRawText);
+  console.log('[appendContent] el className:', el.className, 'toolBlock parent:', currentToolBlock?.parentElement?.id);
   messagesEl.scrollTop = messagesEl.scrollHeight;
 }
 

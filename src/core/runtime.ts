@@ -5,10 +5,6 @@ import {
   createAgentSessionServices,
   SessionManager,
 } from "@mariozechner/pi-coding-agent";
-// NOTE: Tool registration disabled for skills-based v1.
-// import type { ToolDefinition } from "@mariozechner/pi-coding-agent";
-// NOTE: Tool registration disabled for skills-based v1.
-// import { createWikiTools } from "./tools/index.js";
 import { getAgentDir, getSessionDir, slugify } from "./config.js";
 import { join } from "path";
 import { readFile } from "fs/promises";
@@ -98,8 +94,7 @@ async function probeContextWindows(svc: Awaited<ReturnType<typeof createAgentSes
 
 /**
  * Create a wiki AgentSessionRuntime bound to a single wiki root.
- * - Skills-based v1: wiki-ingest, wiki-query, wiki-lint loaded from ~/.llm-wiki-agent/skills/
- * - Built-in tools enabled (read_file, write_file, search_files, terminal, patch)
+ * - Skills-based: wiki-ingest, wiki-query, wiki-lint loaded from ~/.llm-wiki-agent/skills/
  * - Sessions stored in ~/.llm-wiki-agent/sessions/<wiki-slug>/
  * - Uses custom models from ~/.llm-wiki-agent/models.json
  * - External skills (~/.agents/skills/) disabled via noSkills
@@ -112,7 +107,6 @@ export async function createWikiSession(options: WikiSessionOptions) {
   const sessionDir = getSessionDir(wikiSlug);
 
   const sessionManager = SessionManager.create(wikiRoot, sessionDir);
-  // const wikiTools: ToolDefinition[] = createWikiTools({ wikiRoot });
 
   // Load system prompt from template
   const promptPath = new URL("../templates/system-prompt-template.md", import.meta.url).pathname;
@@ -149,11 +143,11 @@ export async function createWikiSession(options: WikiSessionOptions) {
     async (opts) => {
       const result = await createAgentSession({
         ...opts,
-        // noTools: "builtin",  // Skills-based v1: allow built-in tools
+        // Skills-based: allow built-in tools
         agentDir,
         resourceLoader: svc.resourceLoader,
         modelRegistry: svc.modelRegistry,
-        // customTools: wikiTools,  // Skills-based v1: no custom tools
+        // Skills-based: no custom tools
         sessionManager,
       });
       return {

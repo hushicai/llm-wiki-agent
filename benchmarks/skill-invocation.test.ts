@@ -5,11 +5,13 @@
 // Run: bun test benchmarks/skill-invocation.test.ts --timeout 30000
 
 import { describe, expect, test, beforeAll, afterAll } from "bun:test";
-import { mkdir, writeFile, rm } from "fs/promises";
+import { mkdir, writeFile, rm, appendFile } from "fs/promises";
 import { join } from "path";
 import { tmpdir } from "os";
 import { WikiAgent } from "../src/core/agent.js";
 import { ensureWiki } from "../src/core/init.js";
+
+const REPORT_PATH = join(import.meta.dir, "benchmark-report.md");
 
 interface TestCase {
   name: string;
@@ -137,6 +139,18 @@ describe("Skill invocation benchmark", () => {
   beforeAll(async () => {
     await rm(testDir, { recursive: true, force: true });
     agent = new WikiAgent();
+
+    // Initialize report
+    const header = [
+      "# Skill Invocation Benchmark Report",
+      "",
+      `Date: ${new Date().toISOString().split("T")[0]}`,
+      `Model: ${agent.getModels().map((m) => `${m.provider}/${m.id}`).join(", ") || "default"}`,
+      "",
+      "| # | Skill | Test Case | Tools Called | Result | Duration |",
+      "|---|-------|-----------|-------------|--------|----------|",
+    ].join("\n");
+    await writeFile(REPORT_PATH, header + "\n");
   });
 
   afterAll(async () => {
@@ -175,8 +189,9 @@ describe("Skill invocation benchmark", () => {
           }
         });
 
-        // Run the prompt
+        const startTime = Date.now();
         await runtime.session.prompt(c.prompt);
+        const duration = Date.now() - startTime;
         unsub();
 
         // Collect messages
@@ -207,6 +222,10 @@ describe("Skill invocation benchmark", () => {
           if (text) console.log(`  Response: ${text.slice(0, 300)}`);
         }
 
+        // Append report row
+        const row = `| ${passed + failed} | ${c.expectSkill} | ${c.name} | ${toolNames} | ${result ? "✅ PASS" : "❌ FAIL"} | ${(duration / 1000).toFixed(1)}s |\n`;
+        await appendFile(REPORT_PATH, row);
+
         await runtime.dispose();
         expect(result).toBe(true);
       },
@@ -214,13 +233,17 @@ describe("Skill invocation benchmark", () => {
     );
   }
 
-  afterAll(() => {
+  afterAll(async () => {
     const total = passed + failed;
-    console.log(`\n========================================`);
-    console.log(`  Results: ${passed}/${total} passed`);
-    console.log(
-      `  Accuracy: ${total > 0 ? ((passed / total) * 100).toFixed(0) : 0}%`,
-    );
-    console.log(`========================================`);
+    const summary = [
+      "",
+      `**Results: ${passed}/${total} passed — Accuracy: ${total > 0 ? ((passed / total) * 100).toFixed(0) : 0}%**`,
+      "",
+    ].join("\n");
+    await appendFile(REPORT_PATH, summary);
+    console.log(`\nReport saved to: ${REPORT_PATH}`);
+
+    await rm(testDir, { recursive: true, force: true });
+    await agent.dispose();
   });
 });

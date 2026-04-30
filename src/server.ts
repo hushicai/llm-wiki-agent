@@ -63,6 +63,7 @@ async function main() {
   Bun.serve({
     port,
     hostname: host,
+    idleTimeout: 120, // seconds — LLM responses can take 30s+
     async fetch(req) {
       const url = new URL(req.url);
 

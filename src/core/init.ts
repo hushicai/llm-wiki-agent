@@ -67,9 +67,11 @@ async function copySkillsToWiki(wikiRoot: string): Promise<void> {
     mkdirSync(wikiSkillsDir, { recursive: true });
   }
 
-  // Copy entire skills directory recursively
-  const { cpSync } = await import("fs");
-  cpSync(projectSkillsDir, wikiSkillsDir, { recursive: true });
+  // Copy entire skills directory recursively (only if target doesn't exist)
+  if (!existsSync(wikiSkillsDir)) {
+    const { cpSync } = await import("fs");
+    cpSync(projectSkillsDir, wikiSkillsDir, { recursive: true });
+  }
 }
 
 async function generateAgentsMd(wikiRoot: string, wikiName: string): Promise<string> {

@@ -124,10 +124,10 @@ describe("ROLE_PROMPTS", () => {
   test("role prompts mention their respective agent names", async () => {
     const { INGEST_ROLE_PROMPT, QUERY_ROLE_PROMPT, LINT_ROLE_PROMPT, MAIN_ROLE_PROMPT } =
       await import("../src/prompts/index.js");
-    expect(INGEST_ROLE_PROMPT.toLowerCase()).toContain("ingest");
-    expect(QUERY_ROLE_PROMPT.toLowerCase()).toContain("query");
-    expect(LINT_ROLE_PROMPT.toLowerCase()).toContain("lint");
-    expect(MAIN_ROLE_PROMPT.toLowerCase()).toContain("coordinator");
+    expect(INGEST_ROLE_PROMPT).toContain("录入");
+    expect(QUERY_ROLE_PROMPT).toContain("查询");
+    expect(LINT_ROLE_PROMPT).toContain("Lint");
+    expect(MAIN_ROLE_PROMPT).toContain("协调");
   });
 });
 

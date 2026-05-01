@@ -35,6 +35,58 @@ describe("createWikiDelegateTaskTool", () => {
   test("execute has 5 parameters (toolCallId, params, signal, onUpdate, ctx)", () => {
     expect(tool.execute.length).toBeGreaterThanOrEqual(5);
   });
+
+  test(
+    "execute creates subagent, calls LLM, returns text output",
+    async () => {
+      const ac = new AbortController();
+      const ctx = {
+        context: { messages: [{ role: "user", content: "hi" }] },
+      } as any;
+
+      const result = await tool.execute(
+        "test-id",
+        { agent: "query" },
+        ac.signal,
+        undefined,
+        ctx,
+      );
+
+      // Must return AgentToolResult structure
+      expect(result).toHaveProperty("content");
+      expect(Array.isArray(result.content)).toBe(true);
+      expect(result.content.length).toBeGreaterThan(0);
+      expect(result.content[0]).toHaveProperty("type", "text");
+      expect(typeof result.content[0].text).toBe("string");
+      expect(result).toHaveProperty("details");
+    },
+    { timeout: 30000 },
+  );
+
+  test(
+    "execute handles empty subagent output gracefully",
+    async () => {
+      const ac = new AbortController();
+      const ctx = {
+        context: { messages: [{ role: "user", content: "?" }] },
+      } as any;
+
+      // Use ingest agent with minimal context
+      const result = await tool.execute(
+        "test-id-3",
+        { agent: "ingest" },
+        ac.signal,
+        undefined,
+        ctx,
+      );
+
+      // Should always return a result object
+      expect(result).toBeDefined();
+      expect(result).toHaveProperty("content");
+      expect(Array.isArray(result.content)).toBe(true);
+    },
+    { timeout: 30000 },
+  );
 });
 
 describe("ROLE_PROMPTS", () => {
@@ -78,3 +130,4 @@ describe("ROLE_PROMPTS", () => {
     expect(MAIN_ROLE_PROMPT.toLowerCase()).toContain("coordinator");
   });
 });
+

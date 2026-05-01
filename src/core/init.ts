@@ -1,8 +1,9 @@
 // Wiki directory initialization and self-healing
-import { writeFile, mkdir, readFile, readdir } from "fs/promises";
-import { existsSync } from "fs";
+import { writeFile, mkdir, readFile, readdir, copyFile } from "fs/promises";
+import { existsSync, mkdirSync } from "fs";
 import { join } from "path";
 import { stringify, parse } from "yaml";
+import { getAgentDir } from "./config.js";
 
 export interface WikiConfig {
   name: string;
@@ -43,6 +44,32 @@ function buildStructureDiagram(dirs: string[]): string {
 ├── raw/                # Source documents (read-only, user places files here)
 ├── wiki/               # Wiki pages (LLM-managed, flat)
 ${dirList}`;
+}
+
+/**
+ * Copy skills from project (git repo) to .llm-wiki-agent/skills for project-level isolation.
+ * Source: <project>/skills/ (the git repo's skills templates)
+ * Target: <wiki-root>/.llm-wiki-agent/skills/
+ */
+async function copySkillsToWiki(wikiRoot: string): Promise<void> {
+  // Project's skills dir (relative to project root, resolved via import.meta)
+  const projectRoot = new URL("../..", import.meta.url).pathname;
+  const projectSkillsDir = join(projectRoot, "skills");
+  const wikiSkillsDir = join(wikiRoot, ".llm-wiki-agent", "skills");
+
+  // Only copy if project has skills
+  if (!existsSync(projectSkillsDir)) {
+    return;
+  }
+
+  // Create target dir
+  if (!existsSync(wikiSkillsDir)) {
+    mkdirSync(wikiSkillsDir, { recursive: true });
+  }
+
+  // Copy entire skills directory recursively
+  const { cpSync } = await import("fs");
+  cpSync(projectSkillsDir, wikiSkillsDir, { recursive: true });
 }
 
 async function generateAgentsMd(wikiRoot: string, wikiName: string): Promise<string> {
@@ -127,6 +154,9 @@ export async function ensureWiki(wikiRoot: string): Promise<{ created: string[] 
       created.push(filePath);
     }
   }
+
+  // Copy skills to wiki-root for project-level isolation
+  await copySkillsToWiki(wikiRoot);
 
   return { created };
 }

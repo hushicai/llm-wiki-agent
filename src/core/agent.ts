@@ -61,14 +61,22 @@ export class WikiAgent {
     const sessionDir = getSessionDir(wikiSlug);
     const sessionManager = SessionManager.create(cwd, sessionDir);
 
+    // Project-level skills: use wiki-root's .llm-wiki-agent/skills (copied from agent dir during init)
+    const wikiSkillsPath = join(cwd, ".llm-wiki-agent", "skills");
+    const userSkillsPath = join(this.agentDir, "skills");
+    const skillPaths = [
+      ...(existsSync(wikiSkillsPath) ? [wikiSkillsPath] : []),
+      ...(existsSync(userSkillsPath) ? [userSkillsPath] : []),
+    ];
+
     const svc = await createAgentSessionServices({
       cwd,
       agentDir: this.agentDir,
       resourceLoaderOptions: {
         noSkills: true,
         appendSystemPrompt: this.systemPromptLines,
-        ...(existsSync(join(this.agentDir, "skills")) && {
-          additionalSkillPaths: [join(this.agentDir, "skills")],
+        ...(skillPaths.length > 0 && {
+          additionalSkillPaths: skillPaths,
         }),
       },
     });

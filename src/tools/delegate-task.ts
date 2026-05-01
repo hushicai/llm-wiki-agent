@@ -1,6 +1,7 @@
 // src/tools/delegate-task.ts — wiki_delegate_task tool
-import type { ToolDefinition } from "@mariozechner/pi-coding-agent";
+import type { ToolDefinition, Theme } from "@mariozechner/pi-coding-agent";
 import type { AgentToolResult } from "@mariozechner/pi-agent-core";
+import { Text } from "@mariozechner/pi-tui";
 import { WikiAgent } from "../core/agent.js";
 import { INGEST_ROLE_PROMPT, QUERY_ROLE_PROMPT, LINT_ROLE_PROMPT } from "../prompts/index.js";
 
@@ -43,6 +44,13 @@ export function createWikiDelegateTaskTool(
       },
       required: ["agent", "task"],
     },
+    renderCall(args: { agent: string; task: string }, theme: Theme) {
+      const text =
+        theme.fg("toolTitle", theme.bold("wiki_delegate_task")) +
+        " " +
+        theme.fg("muted", JSON.stringify(args));
+      return new Text(text, 0, 0);
+    },
     async execute(
       _toolCallId,
       params: { agent: AgentName; task: string },
@@ -78,26 +86,28 @@ export function createWikiDelegateTaskTool(
           const msg = `[subagent] ⚡ ${toolName} ${argsStr}`.trim();
           onUpdate?.({
             content: [{ type: "text", text: msg }],
-            details: { toolName, args: argsStr, isSubagent: true },
+            details: undefined,
           });
         } else if (event.type === "tool_execution_end") {
-          const toolName = event.toolName || "unknown";
-          const args = event.args || {};
-          const argsStr =
-            args.command ||
-            args.path ||
-            args.pattern ||
-            args.query ||
-            args.search ||
-            args.timeout ||
-            args.limit ||
-            args.cwd ||
-            "";
-          const msg = argsStr ? `[subagent] ✓ ${toolName} ${argsStr}` : `[subagent] ✓ ${toolName}`;
-          onUpdate?.({
-            content: [{ type: "text", text: msg }],
-            details: { toolName: event.toolName },
-          });
+          // const toolName = event.toolName || "unknown";
+          // const args = event.args || {};
+          // const argsStr =
+          //   args.command ||
+          //   args.path ||
+          //   args.pattern ||
+          //   args.query ||
+          //   args.search ||
+          //   args.timeout ||
+          //   args.limit ||
+          //   args.cwd ||
+          //   "";
+          // // const msg = argsStr ? `[subagent] ✓ ${toolName} ${argsStr}` : `[subagent] ✓ ${toolName}`;
+          // const msg = `[subagent] ✓ ${toolName} ${argsStr}`.trim();
+
+          // onUpdate?.({
+          //   content: [{ type: "text", text: msg }],
+          //   details: undefined,
+          // });
         }
       });
 

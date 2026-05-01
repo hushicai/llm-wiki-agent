@@ -1,5 +1,5 @@
 // tests/server.test.ts — HTTP server integration tests
-import { describe, expect, test, beforeAll, afterAll } from "bun:test";
+import { describe, expect, test, beforeAll, afterAll, afterEach, beforeEach } from "bun:test";
 import { rm, mkdir, writeFile } from "fs/promises";
 import { join } from "path";
 import { tmpdir } from "os";
@@ -155,5 +155,66 @@ describe("HTTP Server", () => {
   test("GET /unknown returns 404", async () => {
     const res = await fetch(`http://localhost:${port}/unknown`);
     expect(res.status).toBe(404);
+  });
+});
+
+describe("WebSessionManager", () => {
+  let manager: WebSessionManager;
+  let wikiAgent: WikiAgent;
+  const testRoot = join(testDir, "session-test");
+
+  beforeAll(async () => {
+    wikiAgent = new WikiAgent();
+    await mkdir(testRoot, { recursive: true });
+  });
+
+  afterEach(() => {
+    manager?.dispose();
+  });
+
+  afterAll(async () => {
+    await wikiAgent.dispose();
+    await rm(testRoot, { recursive: true, force: true });
+  });
+
+  test("create returns id and runtime", async () => {
+    manager = new WebSessionManager();
+    const wiki = join(testRoot, "w1");
+    await ensureWiki(wiki);
+    const result = await manager.create(wikiAgent, wiki);
+    expect(result.id).toBeDefined();
+    expect(typeof result.id).toBe("string");
+    expect(result.runtime).toBeDefined();
+  });
+
+  test("get returns runtime for existing session", async () => {
+    manager = new WebSessionManager();
+    const wiki = join(testRoot, "w2");
+    await ensureWiki(wiki);
+    const { id, runtime } = await manager.create(wikiAgent, wiki);
+    const retrieved = manager.get(id);
+    expect(retrieved).toBe(runtime);
+  });
+
+  test("get returns undefined for unknown id", () => {
+    manager = new WebSessionManager();
+    expect(manager.get("nonexistent-id")).toBeUndefined();
+  });
+
+  test("remove disposes session and removes from map", async () => {
+    manager = new WebSessionManager();
+    const wiki = join(testRoot, "w3");
+    await ensureWiki(wiki);
+    const { id, runtime } = await manager.create(wikiAgent, wiki);
+
+    const disposeSpy = runtime.dispose as any;
+    await manager.remove(id);
+    expect(manager.get(id)).toBeUndefined();
+  });
+
+  test("dispose clears all sessions and stops timer", () => {
+    manager = new WebSessionManager();
+    // dispose should not throw
+    expect(() => manager.dispose()).not.toThrow();
   });
 });

@@ -30,7 +30,7 @@ export class WikiAgent {
   private loadSystemPromptSync(): string[] {
     try {
       const promptPath = new URL(
-        "../templates/system-prompt-template.md",
+        "../prompts/system-prompt.md",
         import.meta.url,
       ).pathname;
       const content = readFileSync(promptPath, "utf-8");

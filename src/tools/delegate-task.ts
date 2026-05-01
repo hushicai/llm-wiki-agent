@@ -111,7 +111,7 @@ export function createWikiDelegateTaskTool(wikiRoot: string): ToolDefinition<any
         }
       });
 
-      // System: base prompt (from templates/system-prompt-template.md)
+      // System: base prompt (from prompts/system-prompt.md)
       // User[0]: role prompt (agent role definition)
       // User[1]: user's original question
       await session.sendUserMessage([{ type: "text", text: ROLE_PROMPTS[agent] }]);

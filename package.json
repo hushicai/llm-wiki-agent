@@ -23,6 +23,7 @@
     "start": "bun run src/cli.ts",
     "serve": "bun run src/server.ts --wiki ~/my-wiki",
     "build": "bun build src/cli.ts --outdir dist --target bun",
-    "test": "bun test"
+    "test": "bun test",
+    "benchmark": "bun run benchmarks/delegate-task-instruction-following.ts"
   }
 }

@@ -31,19 +31,48 @@ export function createWikiDelegateTaskTool(wikiRoot: string): ToolDefinition<any
       _toolCallId,
       params: { task: string },
       _signal,
-      _onUpdate,
+      onUpdate,
       _ctx,
     ): Promise<AgentToolResult<any>> {
       const { task } = params;
 
-      // Use a unique temp dir so subagent won't read AGENTS.md from wiki dir
       const NEUTRAL_CWD = mkdtempSync(join(tmpdir(), "wiki-subagent-"));
       const subAgent = new WikiAgent();
       const runtime = await subAgent.createSession(NEUTRAL_CWD);
       const session = runtime.session;
 
+      // Subscribe to subagent events BEFORE prompt
+      const unsubscribe = session.subscribe((event: any) => {
+        // Only show tool calls, skip text messages
+        if (event.type === "tool_execution_start") {
+          const toolName = event.toolName || "unknown";
+          const args = event.args || {};
+          // Extract common args
+          const argsStr = args.command || args.path || args.pattern || args.query || args.search || args.timeout || args.limit || args.cwd || JSON.stringify(args);
+          const msg = `[subagent] ⚡ ${toolName} ${argsStr}`.trim();
+          console.error(msg);
+          onUpdate?.({
+            content: [{ type: "text", text: msg }],
+            details: { toolName, args: argsStr, isSubagent: true },
+          });
+        } else if (event.type === "tool_execution_end") {
+          const toolName = event.toolName || "unknown";
+          const args = event.args || {};
+          const argsStr = args.command || args.path || args.pattern || args.query || args.search || args.timeout || args.limit || args.cwd || "";
+          const msg = argsStr ? `[subagent] ✓ ${toolName} ${argsStr}` : `[subagent] ✓ ${toolName}`;
+          console.error(msg);
+          onUpdate?.({
+            content: [{ type: "text", text: msg }],
+            details: { toolName: event.toolName },
+          });
+        }
+      });
+
       await session.prompt(task);
-      await new Promise((r) => setTimeout(r, 500));
+
+      // Wait briefly for final events
+      await new Promise((r) => setTimeout(r, 300));
+      unsubscribe();
 
       // Extract final output
       const outputs: string[] = [];
@@ -63,6 +92,7 @@ export function createWikiDelegateTaskTool(wikiRoot: string): ToolDefinition<any
       const output = outputs.join("\n");
       return {
         content: [{ type: "text", text: output || "(no output)" }],
+        details: undefined,
       };
     },
   };

@@ -62,7 +62,7 @@ export function createWikiDelegateTaskTool(
       // REAL mode: spin up subagent
       const subAgent = new WikiAgent();
       const runtime = await subAgent.createSession(wikiRoot, {
-        tools: ["read", "grep", "find", "ls"],
+        tools: 'builtin',
       });
       const session = runtime.session;
 

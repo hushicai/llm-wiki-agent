@@ -37,9 +37,9 @@ export function createWikiDelegateTaskTool(
         task: {
           type: "string",
           description:
-            "REQUIRED. The exact user request text to pass to the subagent, verbatim. " +
-            "Must be the user's original words, not a summary or rewrite. " +
-            "Example: if user says '如何开户' the task value must be '如何开户'.",
+            "REQUIRED. The full task description for the subagent. " +
+            "Combine the user's intent with conversation context to form a complete, actionable task. " +
+            "Example: if user says '如何开户', pass '用户问开户需要什么资料和流程，请搜索 wiki 中关于开户的所有内容并综合回答'.",
         },
       },
       required: ["agent", "task"],

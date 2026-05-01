@@ -2,7 +2,7 @@
 // Manages multiple concurrent agent sessions with auto-cleanup.
 import type { WikiAgent } from "../core/agent.js";
 import { createWikiTools } from "../tools/index.js";
-import { MAIN_ROLE_PROMPT } from "../prompts/roles.js";
+import { MAIN_ROLE_PROMPT } from "../prompts/index.js";
 
 interface SessionEntry {
   runtime: any; // AgentSessionRuntime

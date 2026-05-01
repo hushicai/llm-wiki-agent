@@ -4,7 +4,7 @@ import { InteractiveMode } from "@mariozechner/pi-coding-agent";
 import { WikiAgent } from "./core/agent.js";
 import { createWikiTools } from "./tools/index.js";
 import { ensureWiki } from "./core/init.js";
-import { MAIN_ROLE_PROMPT } from "./prompts/roles.js";
+import { MAIN_ROLE_PROMPT } from "./prompts/index.js";
 
 function printHelp(): void {
   console.log(`

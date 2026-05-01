@@ -91,39 +91,39 @@ describe("createWikiDelegateTaskTool", () => {
 
 describe("ROLE_PROMPTS", () => {
   test("INGEST_ROLE_PROMPT is defined and non-empty", async () => {
-    const { INGEST_ROLE_PROMPT } = await import("../src/prompts/roles.js");
+    const { INGEST_ROLE_PROMPT } = await import("../src/prompts/index.js");
     expect(typeof INGEST_ROLE_PROMPT).toBe("string");
     expect(INGEST_ROLE_PROMPT.length).toBeGreaterThan(10);
   });
 
   test("QUERY_ROLE_PROMPT is defined and non-empty", async () => {
-    const { QUERY_ROLE_PROMPT } = await import("../src/prompts/roles.js");
+    const { QUERY_ROLE_PROMPT } = await import("../src/prompts/index.js");
     expect(typeof QUERY_ROLE_PROMPT).toBe("string");
     expect(QUERY_ROLE_PROMPT.length).toBeGreaterThan(10);
   });
 
   test("LINT_ROLE_PROMPT is defined and non-empty", async () => {
-    const { LINT_ROLE_PROMPT } = await import("../src/prompts/roles.js");
+    const { LINT_ROLE_PROMPT } = await import("../src/prompts/index.js");
     expect(typeof LINT_ROLE_PROMPT).toBe("string");
     expect(LINT_ROLE_PROMPT.length).toBeGreaterThan(10);
   });
 
   test("MAIN_ROLE_PROMPT is defined and non-empty", async () => {
-    const { MAIN_ROLE_PROMPT } = await import("../src/prompts/roles.js");
+    const { MAIN_ROLE_PROMPT } = await import("../src/prompts/index.js");
     expect(typeof MAIN_ROLE_PROMPT).toBe("string");
     expect(MAIN_ROLE_PROMPT.length).toBeGreaterThan(10);
   });
 
   test("all role prompts are distinct", async () => {
     const { INGEST_ROLE_PROMPT, QUERY_ROLE_PROMPT, LINT_ROLE_PROMPT, MAIN_ROLE_PROMPT } =
-      await import("../src/prompts/roles.js");
+      await import("../src/prompts/index.js");
     const set = new Set([INGEST_ROLE_PROMPT, QUERY_ROLE_PROMPT, LINT_ROLE_PROMPT, MAIN_ROLE_PROMPT]);
     expect(set.size).toBe(4);
   });
 
   test("role prompts mention their respective agent names", async () => {
     const { INGEST_ROLE_PROMPT, QUERY_ROLE_PROMPT, LINT_ROLE_PROMPT, MAIN_ROLE_PROMPT } =
-      await import("../src/prompts/roles.js");
+      await import("../src/prompts/index.js");
     expect(INGEST_ROLE_PROMPT.toLowerCase()).toContain("ingest");
     expect(QUERY_ROLE_PROMPT.toLowerCase()).toContain("query");
     expect(LINT_ROLE_PROMPT.toLowerCase()).toContain("lint");

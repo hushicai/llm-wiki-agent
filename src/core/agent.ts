@@ -7,8 +7,8 @@ import {
   SessionManager,
 } from "@mariozechner/pi-coding-agent";
 import type { ToolDefinition } from "@mariozechner/pi-agent-core";
-import { readFileSync } from "fs";
 import { getAgentDir, getSessionDir, slugify } from "./config.js";
+import { loadSystemPrompt } from "../prompts/index.js";
 
 export interface ModelInfo {
   id: string;
@@ -29,11 +29,7 @@ export class WikiAgent {
 
   private loadSystemPromptSync(): string[] {
     try {
-      const promptPath = new URL(
-        "../prompts/system-prompt.md",
-        import.meta.url,
-      ).pathname;
-      const content = readFileSync(promptPath, "utf-8");
+      const content = loadSystemPrompt();
       return ["", ...content.split("\n"), ""];
     } catch {
       return [];

@@ -7,7 +7,7 @@ import type { AgentToolResult } from "@mariozechner/pi-agent-core";
 import type { BeforeToolCallContext } from "@mariozechner/pi-agent-core";
 import { WikiAgent } from "../core/agent.js";
 import { createWikiTools } from "./index.js";
-import { INGEST_ROLE_PROMPT, QUERY_ROLE_PROMPT, LINT_ROLE_PROMPT } from "../prompts/roles.js";
+import { INGEST_ROLE_PROMPT, QUERY_ROLE_PROMPT, LINT_ROLE_PROMPT } from "../prompts/index.js";
 
 type AgentName = "ingest" | "query" | "lint";
 

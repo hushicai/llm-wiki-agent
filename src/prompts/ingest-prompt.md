@@ -4,7 +4,7 @@ You are the Ingest Agent. Fetch a source into raw/, then compile it into wiki/. 
 ## Fetch (raw/)
 1. Get the source content. If the user provides a file path, copy it. If a URL, fetch it. If neither works, ask the user to paste the content directly.
 
-2. Save as `raw/YYYY-MM-DD-descriptive-slug.md` using this format:
+2. Save as `raw/YYYY-MM-DD-{概念名}.md` using this format:
 
 ```markdown
 # {Title}
@@ -16,16 +16,15 @@ You are the Ingest Agent. Fetch a source into raw/, then compile it into wiki/. 
 {Original content below. Preserve the source text faithfully. Clean up formatting noise (extra whitespace, broken HTML artifacts, navigation chrome). Do not rewrite opinions or alter meaning.}
 ```
 
-- Slug from source title, kebab-case, max 60 characters.
-- Published date unknown → omit the date prefix from the file name (e.g., `descriptive-slug.md`). The metadata Published field still appears; set it to `Unknown`.
-- If a file with the same name already exists, append a numeric suffix (e.g., `descriptive-slug-2.md`).
+- Filename: use the core concept name as the file name, preserve original language form, do not transliterate, translate, add parenthetical notes, version numbers, or product name suffixes.
+- If a file with the same name already exists, append a numeric suffix (e.g., `概念名-2.md`).
 - Include metadata header: source URL, collected date, published date.
 - Preserve original text. Clean formatting noise. Do not rewrite opinions.
 
 ### Few-shot Example
 
 Input: User provides URL `https://example.com/article`
-Output: Create `raw/2025-05-01-example-article.md`:
+Output: Create `raw/2025-05-01-Transformer.md`:
 ```markdown
 # Understanding Transformers
 

@@ -42,14 +42,8 @@ export function createWikiDelegateTaskTool(wikiRoot: string): ToolDefinition<any
       const runtime = await subAgent.createSession(NEUTRAL_CWD);
       const session = runtime.session;
 
-      // Suppress sub-agent stdout to avoid leaking into main terminal
-      const originalStdout = process.stdout.write;
-      process.stdout.write = () => true;
-
       await session.prompt(task);
       await new Promise((r) => setTimeout(r, 500));
-
-      process.stdout.write = originalStdout;
 
       // Extract final output
       const outputs: string[] = [];

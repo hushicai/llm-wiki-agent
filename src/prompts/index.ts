@@ -5,20 +5,20 @@ function loadPrompt(filename: string): string {
   return readFileSync(new URL(`./${filename}`, import.meta.url), "utf-8");
 }
 
-export function loadMainRole(): string {
-  return loadPrompt("main-role.md");
+export function loadMainPrompt(): string {
+  return loadPrompt("main-prompt.md");
 }
 
-export function loadIngestRole(): string {
-  return loadPrompt("ingest-role.md");
+export function loadIngestPrompt(): string {
+  return loadPrompt("ingest-prompt.md");
 }
 
-export function loadQueryRole(): string {
-  return loadPrompt("query-role.md");
+export function loadQueryPrompt(): string {
+  return loadPrompt("query-prompt.md");
 }
 
-export function loadLintRole(): string {
-  return loadPrompt("lint-role.md");
+export function loadLintPrompt(): string {
+  return loadPrompt("lint-prompt.md");
 }
 
 export function loadSystemPrompt(): string {
@@ -30,7 +30,7 @@ export function loadWikiSchema(): string {
 }
 
 // Convenience re-exports for existing code
-export const MAIN_ROLE_PROMPT = loadMainRole();
-export const INGEST_ROLE_PROMPT = loadIngestRole();
-export const QUERY_ROLE_PROMPT = loadQueryRole();
-export const LINT_ROLE_PROMPT = loadLintRole();
+export const MAIN_ROLE_PROMPT = loadMainPrompt();
+export const INGEST_ROLE_PROMPT = loadIngestPrompt();
+export const QUERY_ROLE_PROMPT = loadQueryPrompt();
+export const LINT_ROLE_PROMPT = loadLintPrompt();

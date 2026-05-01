@@ -16,6 +16,14 @@ export interface ModelInfo {
   contextWindow?: number;
 }
 
+/**
+ * tools option for createSession:
+ * - "builtin" → load all SDK built-in tools (read, bash, edit, write, grep, find, ls)
+ * - (string | ToolDefinition)[] → only these specific tools are enabled
+ * - undefined → no tools (LLM can only respond with text)
+ */
+export type ToolsOption = "builtin" | (string | ToolDefinition)[];
+
 export class WikiAgent {
   private agentDir: string;
   private systemPromptLines: string[];
@@ -37,15 +45,16 @@ export class WikiAgent {
   }
 
   async createSession(cwd: string, options?: {
-    tools?: (string | ToolDefinition)[];
+    tools?: ToolsOption;
     /** Additional system prompt lines to append after the base system prompt */
     appendSystemPrompt?: string[];
   }) {
-    // Filter tools into built-in and custom
     const builtInTools: string[] = [];
     const customToolsList: ToolDefinition[] = [];
 
-    if (options?.tools !== undefined) {
+    // "builtin" → don't filter, SDK loads all defaults
+    // array → parse into built-in names and custom definitions
+    if (Array.isArray(options?.tools)) {
       for (const tool of options.tools) {
         if (typeof tool === "string") {
           builtInTools.push(tool);
@@ -91,9 +100,9 @@ export class WikiAgent {
           resourceLoader: svc.resourceLoader,
           modelRegistry: svc.modelRegistry,
           sessionManager,
-          ...(options?.tools !== undefined && {
-            // pi-mono's `tools` parameter is a global allowlist that filters
-            // BOTH built-in and custom tools. Include custom tool names too.
+          // "builtin": omit tools → SDK uses defaults
+          // array: pass as allowlist
+          ...(Array.isArray(options?.tools) && {
             tools: [...builtInTools, ...customToolsList.map((t) => t.name)],
             ...(customToolsList.length > 0 && { customTools: customToolsList }),
           }),

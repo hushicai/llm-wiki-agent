@@ -37,10 +37,8 @@ export function createWikiDelegateTaskTool(
         task: {
           type: "string",
           description:
-            "REQUIRED. The full task description for the subagent. " +
-            "Combine the user's intent with conversation context to form a complete, actionable task. " +
-            "Example: if user says '如何开户', pass '用户问开户需要什么资料和流程，请搜索 wiki 中关于开户的所有内容并综合回答'.",
-        },
+            "REQUIRED. The full task description for the subagent. "
+          },
       },
       required: ["agent", "task"],
     },
@@ -64,7 +62,7 @@ export function createWikiDelegateTaskTool(
       // REAL mode: spin up subagent
       const subAgent = new WikiAgent();
       const runtime = await subAgent.createSession(wikiRoot, {
-        tools: undefined,
+        tools: ["read", "grep", "find", "ls"],
       });
       const session = runtime.session;
 

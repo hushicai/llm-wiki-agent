@@ -33,7 +33,6 @@ describe("llm-wiki-agent e2e", () => {
 
       // Required files
       expect(created).toContain(join(wikiRoot, ".wikiconfig.yaml"));
-      expect(created).toContain(join(wikiRoot, "AGENTS.md"));
       expect(created).toContain(join(wikiRoot, "index.md"));
       expect(created).toContain(join(wikiRoot, "log.md"));
     });

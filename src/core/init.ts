@@ -74,23 +74,13 @@ async function copySkillsToWiki(wikiRoot: string): Promise<void> {
   }
 }
 
-async function generateAgentsMd(wikiRoot: string, wikiName: string): Promise<string> {
-  const dirs = await getContentDirs(wikiRoot);
-  const structure = buildStructureDiagram(dirs);
-
-  const templatePath = new URL("../templates/wiki-schema-template.md", import.meta.url).pathname;
-  const template = await readFile(templatePath, "utf-8");
-
-  return template
-    .replace(/\{\{WIKI_NAME\}\}/g, wikiName)
-    .replace(/\{\{STRUCTURE\}\}/g, structure);
-}
 
 /**
  * Required files and directories for a valid wiki.
  * Used by ensureWiki() for self-healing.
  */
 const REQUIRED_DIRS = ["raw", "wiki"];
+
 const REQUIRED_FILES: Array<{ name: string; generate: (wikiRoot: string, name: string) => Promise<void> }> = [
   {
     name: ".wikiconfig.yaml",
@@ -105,16 +95,9 @@ const REQUIRED_FILES: Array<{ name: string; generate: (wikiRoot: string, name: s
     },
   },
   {
-    name: "AGENTS.md",
-    generate: async (wikiRoot, _name) => {
-      const content = await generateAgentsMd(wikiRoot, "My Wiki");
-      await writeFile(join(wikiRoot, "AGENTS.md"), content);
-    },
-  },
-  {
     name: "index.md",
     generate: async (wikiRoot, _name) => {
-      await writeFile(join(wikiRoot, "index.md"), "# My Wiki\n\n> Personal knowledge wiki\n\n## Pages\n\n<!-- wiki pages will be listed here -->\n");
+      await writeFile(join(wikiRoot, "index.md"), "# My Wiki\n\n> Personal knowledge wiki\n\n## Pages\n\n<!-- wiki pages will be listed here -->");
     },
   },
   {

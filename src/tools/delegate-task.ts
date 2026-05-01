@@ -1,12 +1,7 @@
 // src/tools/delegate-task.ts — wiki_delegate_task tool
-import { mkdtempSync } from "fs";
-import { tmpdir } from "os";
-import { join } from "path";
 import type { ToolDefinition } from "@mariozechner/pi-coding-agent";
 import type { AgentToolResult } from "@mariozechner/pi-agent-core";
-import type { BeforeToolCallContext } from "@mariozechner/pi-agent-core";
 import { WikiAgent } from "../core/agent.js";
-import { createWikiTools } from "./index.js";
 import { INGEST_ROLE_PROMPT, QUERY_ROLE_PROMPT, LINT_ROLE_PROMPT } from "../prompts/index.js";
 
 type AgentName = "ingest" | "query" | "lint";
@@ -17,14 +12,17 @@ const ROLE_PROMPTS: Record<AgentName, string> = {
   lint: LINT_ROLE_PROMPT,
 };
 
-export function createWikiDelegateTaskTool(wikiRoot: string): ToolDefinition<any> {
+export function createWikiDelegateTaskTool(
+  wikiRoot: string,
+  options?: { mockMode?: boolean },
+): ToolDefinition<any> {
+
   return {
     name: "wiki_delegate_task",
     label: "Wiki Delegate",
     description:
       "Delegate a task to a specialized wiki subagent (ingest/query/lint). " +
-      "The subagent inherits the user's original request from the conversation context. " +
-      "Choose the appropriate agent type based on the task.",
+      "Pass the user's full request in the 'task' parameter so the subagent knows what to do.",
     parameters: {
       type: "object",
       properties: {
@@ -35,37 +33,31 @@ export function createWikiDelegateTaskTool(wikiRoot: string): ToolDefinition<any
             "Which subagent to delegate to: " +
             "ingest=add content, query=search/retrieve, lint=review/fix quality",
         },
+        task: {
+          type: "string",
+          description:
+            "REQUIRED. The exact user request text to pass to the subagent, verbatim. " +
+            "Must be the user's original words, not a summary or rewrite. " +
+            "Example: if user says '如何开户' the task value must be '如何开户'.",
+        },
       },
-      required: ["agent"],
+      required: ["agent", "task"],
     },
     async execute(
       _toolCallId,
-      params: { agent: AgentName },
+      params: { agent: AgentName; task: string },
       _signal,
       onUpdate,
       _ctx,
     ): Promise<AgentToolResult<any>> {
-      const { agent } = params;
+      const { agent, task } = params;
+      const userText = task.trim();
 
-      // Extract user message from main agent context
-      const ctx = _ctx as BeforeToolCallContext;
-      const userMessages = ctx.context.messages.filter((m: any) => m.role === "user");
-      const lastUserMessage = userMessages[userMessages.length - 1];
-
-      // Extract text from the message
-      let userText = "";
-      if (typeof lastUserMessage?.content === "string") {
-        userText = lastUserMessage.content;
-      } else if (Array.isArray(lastUserMessage?.content)) {
-        userText = lastUserMessage.content
-          .filter((c: any) => c.type === "text")
-          .map((c: any) => c.text)
-          .join("\n");
-      }
-
-      const NEUTRAL_CWD = mkdtempSync(join(tmpdir(), "wiki-subagent-"));
+      // REAL mode: spin up subagent
       const subAgent = new WikiAgent();
-      const runtime = await subAgent.createSession(NEUTRAL_CWD);
+      const runtime = await subAgent.createSession(wikiRoot, {
+        tools: undefined,
+      });
       const session = runtime.session;
 
       // Subscribe to subagent events BEFORE prompt
@@ -84,7 +76,6 @@ export function createWikiDelegateTaskTool(wikiRoot: string): ToolDefinition<any
             args.cwd ||
             JSON.stringify(args);
           const msg = `[subagent] ⚡ ${toolName} ${argsStr}`.trim();
-          console.error(msg);
           onUpdate?.({
             content: [{ type: "text", text: msg }],
             details: { toolName, args: argsStr, isSubagent: true },
@@ -103,7 +94,6 @@ export function createWikiDelegateTaskTool(wikiRoot: string): ToolDefinition<any
             args.cwd ||
             "";
           const msg = argsStr ? `[subagent] ✓ ${toolName} ${argsStr}` : `[subagent] ✓ ${toolName}`;
-          console.error(msg);
           onUpdate?.({
             content: [{ type: "text", text: msg }],
             details: { toolName: event.toolName },

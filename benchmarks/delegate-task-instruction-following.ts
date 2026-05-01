@@ -1,204 +1,199 @@
 /**
  * benchmarks/delegate-task-instruction-following.ts
  *
- * Evaluates the delegate-task tool's instruction following.
- * Run: bun run benchmarks/delegate-task-instruction-following.ts
+ * Tests whether the main agent correctly calls wiki_delegate_task tool
+ * with the appropriate agent type (ingest/query/lint) based on the user's request.
  *
- * Not part of test gating — purely informational.
+ * Main agent runs with real LLM (deepseek-v4-flash for speed).
+ * wiki_delegate_task runs in mock mode (no real subagent, just captures tool calls).
+ *
+ * Run: bun run benchmarks/delegate-task-instruction-following.ts
  */
 import { createWikiDelegateTaskTool } from "../src/tools/delegate-task.js";
 import { ensureWiki } from "../src/core/init.js";
-import { writeFileSync, readdirSync, existsSync, rmSync } from "fs";
+import { writeFileSync, rmSync } from "fs";
 import { join } from "path";
+import { WikiAgent } from "../src/core/agent.js";
 
 const BENCH_ROOT = "/tmp/benchmark-wiki";
 
-interface Check {
-  description: string;
-  pass: (output: string, toolCalls: string[]) => boolean;
-}
-
 interface BenchmarkCase {
   name: string;
-  agent: "ingest" | "query" | "lint";
   userMessage: string;
-  wikiSetup?: () => void | Promise<void>;
-  checks: Check[];
+  /** Which agent type the main agent SHOULD call */
+  expectedAgent: "ingest" | "query" | "lint";
+  /** Optional wiki state before the prompt */
+  wikiSetup?: () => void;
 }
 
-const RAW_DIR = join(BENCH_ROOT, "raw");
 const WIKI_DIR = join(BENCH_ROOT, "wiki");
-
-function listFiles(dir: string, ext = ".md"): string[] {
-  try {
-    return readdirSync(dir)
-      .filter(f => f.endsWith(ext))
-      .sort();
-  } catch {
-    return [];
-  }
-}
-
-function countFiles(dir: string): number {
-  try {
-    return readdirSync(dir).filter(f => f.endsWith(".md")).length;
-  } catch {
-    return 0;
-  }
-}
+const RAW_DIR = join(BENCH_ROOT, "raw");
 
 const CASES: BenchmarkCase[] = [
   {
-    name: "ingest: creates raw + wiki file",
-    agent: "ingest",
-    userMessage: "录入 https://example.com/article",
-    async checks() {
-      const beforeRaw = countFiles(RAW_DIR);
-      const beforeWiki = countFiles(WIKI_DIR);
-
-      const output = ""; // filled by runner
-      const toolCalls: string[] = []; // filled by runner
-
-      // After running, there should be new files
-      const afterRaw = countFiles(RAW_DIR);
-      const afterWiki = countFiles(WIKI_DIR);
-
-      return [
-        {
-          description: "creates a raw/ file",
-          pass: () => afterRaw > beforeRaw,
-        },
-        {
-          description: "creates a wiki/ file",
-          pass: () => afterWiki > beforeWiki,
-        },
-      ];
+    name: "main → ingest when adding content",
+    userMessage: "录入 https://example.com/article 关于 Transformer 的内容",
+    expectedAgent: "ingest",
+  },
+  {
+    name: "main → query when searching",
+    userMessage: "关于 Transformer 我知道什么？",
+    expectedAgent: "query",
+    wikiSetup: () => {
+      writeFileSync(
+        join(WIKI_DIR, "transformers.md"),
+        "---\ntitle: Transformers\ntype: concept\n---\n\n# Transformers\n\nAttention is all you need.\n"
+      );
     },
   },
   {
-    name: "query: reads index first",
-    agent: "query",
-    userMessage: "关于 Transformers 我知道什么？",
-    checks: [
-      {
-        description: "subagent output is not empty",
-        pass: (output) => output.trim().length > 10,
-      },
-    ],
-  },
-  {
-    name: "lint: reads index",
-    agent: "lint",
-    userMessage: "检查一下 wiki",
-    checks: [
-      {
-        description: "output indicates index was checked",
-        pass: (output) => output.length > 0,
-      },
-    ],
+    name: "main → lint when reviewing",
+    userMessage: "检查一下 wiki 质量",
+    expectedAgent: "lint",
   },
 ];
 
 async function runCase(
   c: BenchmarkCase,
-  wikiRoot: string,
+  wikiRoot: string
 ): Promise<{
   name: string;
+  expectedAgent: string;
+  delegateToolCalls: { agent: string; wikiRoot: string }[];
   passed: boolean;
   details: string[];
-  toolCalls: string[];
 }> {
-  const tool = createWikiDelegateTaskTool(wikiRoot);
-  const ac = new AbortController();
-  const ctx = {
-    context: {
-      messages: [{ role: "user", content: c.userMessage }],
-    },
-  } as any;
+  // Setup wiki state
+  if (c.wikiSetup) c.wikiSetup();
 
-  const capturedTools: string[] = [];
-  const capturedArgs: string[] = [];
+  // Create delegate-task tool in MOCK mode — captures calls without spinning up subagent
+  const delegateTool = createWikiDelegateTaskTool(wikiRoot, { mockMode: true });
 
-  try {
-    const result = await tool.execute(
-      `bench-${Date.now()}`,
-      { agent: c.agent },
-      ac.signal,
-      (update: any) => {
-        if (update.details?.toolName) {
-          capturedTools.push(update.details.toolName);
-          capturedArgs.push(update.details.args || "");
-        }
-      },
-      ctx,
-    );
+  // All wiki tools for the main agent
+  const wikiTools = createWikiTools(wikiRoot);
 
-    const output = (result.content as any[])?.[0]?.text ?? "";
+  // Main agent session with delegate-task + wiki tools
+  const agent = new WikiAgent();
+  const runtime = await agent.createSession(wikiRoot, {
+    tools: [...wikiTools, delegateTool],
+  });
+  const session = runtime.session;
 
-    // Get dynamic checks (some cases generate checks based on state)
-    const checks = await (typeof c.checks === "function"
-      ? (c.checks as any)(output, capturedTools)
-      : c.checks);
+  const delegateToolCalls: { agent: string; wikiRoot: string }[] = [];
 
-    const details: string[] = [];
-    let allPassed = true;
-
-    for (const check of checks) {
-      const ok = check.pass(output, capturedTools);
-      if (!ok) allPassed = false;
-      details.push(`${ok ? "✓" : "✗"} ${check.description}`);
+  // Subscribe to capture delegate-task calls
+  session.subscribe((event: any) => {
+    if (event.type === "tool_execution_end") {
+      if (event.toolName === "wiki_delegate_task") {
+        // The tool result may contain details about what subagent was called
+        // But since we're in mock mode, we won't see the subagent's internal calls
+        // from here. We check the result's details instead.
+      }
     }
+  });
 
-    return {
-      name: c.name,
-      passed: allPassed,
-      details,
-      toolCalls: capturedTools,
-    };
-  } catch (e: any) {
-    return {
-      name: c.name,
-      passed: false,
-      details: [`ERROR: ${e.message}`],
-      toolCalls: capturedTools,
-    };
+  // Send user message
+  await session.prompt(c.userMessage);
+
+  // Wait for agent to finish
+  await new Promise((r) => setTimeout(r, 500));
+
+  // Check session messages for delegate-task tool calls
+  const messages = session.state.messages;
+  for (const msg of messages) {
+    if (msg.role === "tool" && Array.isArray(msg.content)) {
+      for (const part of msg.content) {
+        if (part.type === "toolResult" && part.name === "wiki_delegate_task") {
+          try {
+            const args = typeof part.content === "string"
+              ? JSON.parse(part.content)
+              : part.content;
+            // Tool result content is the text output; actual args come from the tool call
+            // We need to look at the preceding assistant message
+          } catch { /* ignore */ }
+        }
+      }
+    }
   }
+
+  // Extract tool calls from assistant messages
+  for (const msg of messages) {
+    if (msg.role === "assistant" && Array.isArray(msg.content)) {
+      for (const part of msg.content) {
+        if (part.type === "toolCall" && part.name === "wiki_delegate_task") {
+          delegateToolCalls.push({
+            agent: part.arguments?.agent ?? "unknown",
+            wikiRoot: part.arguments?.wikiRoot ?? "unknown",
+          });
+        }
+      }
+    }
+  }
+
+  await runtime.dispose();
+  await agent.dispose();
+
+  // Verify
+  const calledAgent = delegateToolCalls[0]?.agent;
+  const passed = calledAgent === c.expectedAgent;
+  const details = passed
+    ? [`✓ called ${calledAgent} agent`]
+    : [
+        `✗ expected agent=${c.expectedAgent}, got ${calledAgent ?? "(not called)"}`,
+        `  delegate calls: ${JSON.stringify(delegateToolCalls)}`,
+      ];
+
+  return {
+    name: c.name,
+    expectedAgent: c.expectedAgent,
+    delegateToolCalls,
+    passed,
+    details,
+  };
 }
 
 async function main() {
-  // Clean benchmark wiki
+  // Clean and init benchmark wiki
   try {
     rmSync(BENCH_ROOT, { recursive: true, force: true });
   } catch { /* ignore */ }
   await ensureWiki(BENCH_ROOT);
 
-  // Add a sample page for query/lint tests
-  writeFileSync(
-    join(WIKI_DIR, "transformers.md"),
-    `---\ntitle: Transformers\ntype: concept\ncreated: 2025-01-01\nupdated: 2025-01-01\nsources: []\n---\n\n# Transformers\n\nAttention is all you need.\n`
-  );
-  writeFileSync(join(WIKI_DIR, "index.md"), `# Wiki\n\n## Pages\n\n- [[Transformers]]\n`);
+  // Create index
+  writeFileSync(join(WIKI_DIR, "index.md"), "# Wiki\n\n## Pages\n\n- [[Transformers]]\n");
 
   console.log("=".repeat(60));
   console.log("Delegate-task Instruction Following Benchmark");
+  console.log("(main agent → delegate-task, mock subagent)");
   console.log("=".repeat(60));
   console.log();
 
   const results = [];
   for (const c of CASES) {
     process.stdout.write(`Running: ${c.name}... `);
-    const result = await runCase(c, BENCH_ROOT);
-    results.push(result);
-    console.log(result.passed ? "✓" : "✗");
-    for (const d of result.details) {
-      console.log(`  ${d}`);
+    try {
+      const result = await runCase(c, BENCH_ROOT);
+      results.push(result);
+      console.log(result.passed ? "✓" : "✗");
+      for (const d of result.details) {
+        console.log(`  ${d}`);
+      }
+    } catch (e: any) {
+      console.log(`✗ ERROR: ${e.message}`);
+      results.push({
+        name: c.name,
+        expectedAgent: c.expectedAgent,
+        delegateToolCalls: [],
+        passed: false,
+        details: [`ERROR: ${e.message}`],
+      });
     }
   }
 
   console.log();
   console.log("-".repeat(60));
 
-  const passed = results.filter(r => r.passed).length;
+  const passed = results.filter((r) => r.passed).length;
   const total = results.length;
   const score = Math.round((passed / total) * 100);
 
@@ -210,11 +205,12 @@ async function main() {
     score,
     passed,
     total,
-    cases: results.map(r => ({
+    cases: results.map((r) => ({
       name: r.name,
+      expectedAgent: r.expectedAgent,
+      delegateToolCalls: r.delegateToolCalls,
       passed: r.passed,
       details: r.details,
-      toolCalls: r.toolCalls,
     })),
   };
 

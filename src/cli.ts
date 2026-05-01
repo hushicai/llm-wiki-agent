@@ -2,7 +2,7 @@
 // CLI entry point — wiki agent
 import { InteractiveMode } from "@mariozechner/pi-coding-agent";
 import { WikiAgent } from "./core/agent.js";
-import { createWikiTools } from "./tools/index.js";
+import { createWikiDelegateTaskTool } from "./tools/delegate-task.js";
 import { ensureWiki } from "./core/init.js";
 import { MAIN_ROLE_PROMPT } from "./prompts/index.js";
 
@@ -71,10 +71,10 @@ async function main(): Promise<void> {
     pipedQuery = Buffer.concat(chunks).toString("utf-8").trim();
   }
 
-  // Create agent and session
+  // Create agent and session — main agent only has wiki_delegate_task
   const agent = new WikiAgent();
   const runtime = await agent.createSession(wikiRoot, {
-    tools: createWikiTools(wikiRoot),
+    tools: [createWikiDelegateTaskTool(wikiRoot)],
     appendSystemPrompt: [MAIN_ROLE_PROMPT],
   });
 

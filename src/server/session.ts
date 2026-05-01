@@ -1,7 +1,7 @@
 // src/server/session.ts — Web session manager for llm-wiki-agent
 // Manages multiple concurrent agent sessions with auto-cleanup.
 import type { WikiAgent } from "../core/agent.js";
-import { createWikiTools } from "../tools/index.js";
+import { createWikiDelegateTaskTool } from "../tools/delegate-task.js";
 import { MAIN_ROLE_PROMPT } from "../prompts/index.js";
 
 interface SessionEntry {
@@ -25,7 +25,7 @@ export class WebSessionManager {
   ): Promise<{ id: string; runtime: any }> {
     const id = crypto.randomUUID();
     const runtime = await agent.createSession(wikiRoot, {
-      tools: createWikiTools(wikiRoot),
+      tools: [createWikiDelegateTaskTool(wikiRoot)],
       appendSystemPrompt: [MAIN_ROLE_PROMPT],
     });
     const now = Date.now();

@@ -7,7 +7,7 @@ import { tmpdir } from "os";
 import { createAgentSessionServices } from "@mariozechner/pi-coding-agent";
 import type { ExtensionFactory, ToolDefinition } from "@mariozechner/pi-coding-agent";
 import { ensureWiki } from "../src/core/init.js";
-import { createWikiSession } from "../src/core/runtime.js";
+import { WikiAgent } from "../src/core/agent.js";
 import { getAgentDir } from "../src/core/config.js";
 
 describe("Extensions support", () => {
@@ -159,18 +159,5 @@ describe("Extensions support", () => {
     });
   });
 
-  describe("extensions through createWikiSession", () => {
-    test("createWikiSession does not crash with extensions in agent dir", async () => {
-      // The real agent dir (~/.llm-wiki-agent/) doesn't have extensions,
-      // so this just verifies the runtime doesn't crash when loading
-      const runtime = await createWikiSession({ wikiRoot });
-      const extensionsResult = runtime.services.resourceLoader.getExtensions();
 
-      // In the real config dir, there are no extensions, so this should be empty
-      // But the system should handle it gracefully
-      expect(extensionsResult.extensions).toBeDefined();
-      expect(extensionsResult.errors).toBeDefined();
-      await runtime.dispose();
-    });
-  });
 });

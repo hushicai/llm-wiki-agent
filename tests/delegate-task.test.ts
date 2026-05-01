@@ -19,13 +19,15 @@ describe("createWikiDelegateTaskTool", () => {
     expect(tool.description.length).toBeGreaterThan(10);
   });
 
-  test("parameters has agent field as required string enum", () => {
+  test("parameters has agent and task as required, wikiRoot optional", () => {
     const params = tool.parameters as any;
     expect(params.type).toBe("object");
     expect(params.properties.agent.type).toBe("string");
     expect(params.properties.agent.enum).toEqual(["ingest", "query", "lint"]);
+    expect(params.properties.task.type).toBe("string");
     expect(params.required).toContain("agent");
-    expect(params.required.length).toBe(1);
+    expect(params.required).toContain("task");
+    expect(params.required).not.toContain("wikiRoot");
   });
 
   test("execute is a function", () => {
@@ -40,16 +42,13 @@ describe("createWikiDelegateTaskTool", () => {
     "execute creates subagent, calls LLM, returns text output",
     async () => {
       const ac = new AbortController();
-      const ctx = {
-        context: { messages: [{ role: "user", content: [{ type: "text", text: "hi" }] }] },
-      } as any;
 
       const result = await tool.execute(
         "test-id",
-        { agent: "query" },
+        { agent: "query", task: "hi" },
         ac.signal,
         undefined,
-        ctx,
+        {} as any,
       );
 
       // Must return AgentToolResult structure
@@ -67,17 +66,13 @@ describe("createWikiDelegateTaskTool", () => {
     "execute handles empty subagent output gracefully",
     async () => {
       const ac = new AbortController();
-      const ctx = {
-        context: { messages: [{ role: "user", content: [{ type: "text", text: "?" }] }] },
-      } as any;
 
-      // Use ingest agent with minimal context
       const result = await tool.execute(
         "test-id-3",
-        { agent: "ingest" },
+        { agent: "ingest", task: "?" },
         ac.signal,
         undefined,
-        ctx,
+        {} as any,
       );
 
       // Should always return a result object
@@ -130,4 +125,3 @@ describe("ROLE_PROMPTS", () => {
     expect(MAIN_ROLE_PROMPT).toContain("协调");
   });
 });
-

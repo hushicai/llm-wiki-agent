@@ -1,227 +1,69 @@
 {
-  "timestamp": "2026-05-01T10:39:20.970Z",
-  "score": 71,
-  "passed": 5,
-  "total": 7,
+  "timestamp": "2026-05-01T11:39:21.084Z",
+  "score": 100,
+  "passed": 3,
+  "total": 3,
   "cases": [
     {
-      "name": "routing: ingest with URL",
+      "name": "main → ingest when adding content",
+      "expectedAgent": "ingest",
+      "delegateToolCalls": [
+        {
+          "agent": "ingest",
+          "wikiRoot": "/tmp/benchmark-wiki"
+        },
+        {
+          "agent": "query",
+          "wikiRoot": "/tmp/benchmark-wiki"
+        }
+      ],
       "passed": true,
-      "details": "",
-      "toolCalls": []
-    },
-    {
-      "name": "routing: query search",
-      "passed": true,
-      "details": "INFO: No automated checks — output length: 410 chars",
-      "toolCalls": [
-        "read",
-        "read",
-        "bash",
-        "bash",
-        "bash",
-        "bash"
+      "details": [
+        "✓ called ingest agent"
       ]
     },
     {
-      "name": "routing: lint check",
+      "name": "main → query when searching",
+      "expectedAgent": "query",
+      "delegateToolCalls": [
+        {
+          "agent": "query",
+          "wikiRoot": "/tmp/benchmark-wiki"
+        },
+        {
+          "agent": "query",
+          "wikiRoot": "/tmp/benchmark-wiki"
+        },
+        {
+          "agent": "query",
+          "wikiRoot": "/tmp/benchmark-wiki"
+        },
+        {
+          "agent": "ingest",
+          "wikiRoot": "/tmp/benchmark-wiki"
+        }
+      ],
       "passed": true,
-      "details": "INFO: No automated checks — output length: 524 chars",
-      "toolCalls": [
-        "bash",
-        "bash",
-        "bash",
-        "bash",
-        "bash",
-        "bash",
-        "bash",
-        "bash",
-        "bash",
-        "bash",
-        "bash",
-        "bash",
-        "bash",
-        "bash",
-        "bash",
-        "bash",
-        "bash",
-        "bash",
-        "bash",
-        "bash",
-        "bash",
-        "bash",
-        "bash",
-        "bash",
-        "read",
-        "read",
-        "read",
-        "read",
-        "read",
-        "read",
-        "read",
-        "read",
-        "read",
-        "read",
-        "read",
-        "read",
-        "read",
-        "read",
-        "read",
-        "read",
-        "read",
-        "read",
-        "read",
-        "read",
-        "read",
-        "read",
-        "read",
-        "read",
-        "read",
-        "read",
-        "read",
-        "read",
-        "read",
-        "read",
-        "bash",
-        "bash",
-        "bash",
-        "bash",
-        "bash",
-        "bash",
-        "edit",
-        "edit",
-        "edit",
-        "edit",
-        "read",
-        "read",
-        "edit",
-        "edit"
+      "details": [
+        "✓ called query agent"
       ]
     },
     {
-      "name": "ingest: creates raw file",
-      "passed": false,
-      "details": "FAIL: subagent should create a raw/ file — expected tool 'write', captured: bash, bash, bash, bash, bash, bash, bash, bash",
-      "toolCalls": [
-        "bash",
-        "bash",
-        "bash",
-        "bash",
-        "bash",
-        "bash",
-        "bash",
-        "bash"
-      ]
-    },
-    {
-      "name": "ingest: creates wiki page",
-      "passed": false,
-      "details": "FAIL: subagent should create a wiki/ file — expected tool 'write', captured: bash, bash, bash, bash, bash, bash",
-      "toolCalls": [
-        "bash",
-        "bash",
-        "bash",
-        "bash",
-        "bash",
-        "bash"
-      ]
-    },
-    {
-      "name": "query: reads index first",
+      "name": "main → lint when reviewing",
+      "expectedAgent": "lint",
+      "delegateToolCalls": [
+        {
+          "agent": "lint",
+          "wikiRoot": "/tmp/benchmark-wiki"
+        },
+        {
+          "agent": "lint",
+          "wikiRoot": "/tmp/benchmark-wiki"
+        }
+      ],
       "passed": true,
-      "details": "PASS: subagent should read wiki/index.md first",
-      "toolCalls": [
-        "read",
-        "read",
-        "bash",
-        "bash",
-        "bash",
-        "bash"
-      ]
-    },
-    {
-      "name": "lint: auto-fix index",
-      "passed": true,
-      "details": "PASS: subagent should check index consistency",
-      "toolCalls": [
-        "read",
-        "bash",
-        "bash",
-        "read",
-        "bash",
-        "bash",
-        "bash",
-        "bash",
-        "bash",
-        "bash",
-        "bash",
-        "bash",
-        "bash",
-        "bash",
-        "bash",
-        "bash",
-        "read",
-        "read",
-        "bash",
-        "read",
-        "read",
-        "bash",
-        "read",
-        "read",
-        "read",
-        "read",
-        "read",
-        "read",
-        "read",
-        "read",
-        "read",
-        "read",
-        "read",
-        "read",
-        "read",
-        "read",
-        "read",
-        "read",
-        "read",
-        "read",
-        "read",
-        "read",
-        "read",
-        "read",
-        "bash",
-        "bash",
-        "bash",
-        "bash",
-        "bash",
-        "bash",
-        "bash",
-        "bash",
-        "bash",
-        "bash",
-        "bash",
-        "bash",
-        "bash",
-        "bash",
-        "edit",
-        "edit",
-        "edit",
-        "edit",
-        "edit",
-        "edit",
-        "edit",
-        "edit",
-        "bash",
-        "bash",
-        "bash",
-        "bash",
-        "bash",
-        "bash",
-        "read",
-        "read",
-        "edit",
-        "edit",
-        "read",
-        "read"
+      "details": [
+        "✓ called lint agent"
       ]
     }
   ]

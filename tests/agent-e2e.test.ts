@@ -66,8 +66,9 @@ describe("llm-wiki-agent e2e", () => {
       const runtime2 = await createWikiSession({ wikiRoot });
 
       expect(runtime1.session).not.toBe(runtime2.session);
-      expect(runtime1.session.state.tools.length).toBeGreaterThan(3);
-      expect(runtime2.session.state.tools.length).toBeGreaterThan(3);
+      // Main agent has: wiki_delegate_task only
+      expect(runtime1.session.state.tools.length).toBeGreaterThan(0);
+      expect(runtime2.session.state.tools.length).toBeGreaterThan(0);
 
       await runtime1.dispose();
       await runtime2.dispose();

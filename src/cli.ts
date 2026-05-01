@@ -4,6 +4,7 @@ import { InteractiveMode } from "@mariozechner/pi-coding-agent";
 import { WikiAgent } from "./core/agent.js";
 import { createWikiTools } from "./tools/index.js";
 import { ensureWiki } from "./core/init.js";
+import { MAIN_ROLE_PROMPT } from "./prompts/roles.js";
 
 function printHelp(): void {
   console.log(`
@@ -72,7 +73,10 @@ async function main(): Promise<void> {
 
   // Create agent and session
   const agent = new WikiAgent();
-  const runtime = await agent.createSession(wikiRoot, { tools: createWikiTools(wikiRoot) });
+  const runtime = await agent.createSession(wikiRoot, {
+    tools: createWikiTools(wikiRoot),
+    appendSystemPrompt: [MAIN_ROLE_PROMPT],
+  });
 
   if (pipedQuery) {
     // PrintMode: piped query via AgentSession

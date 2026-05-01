@@ -7,9 +7,7 @@ import {
   SessionManager,
 } from "@mariozechner/pi-coding-agent";
 import type { ToolDefinition } from "@mariozechner/pi-agent-core";
-import { existsSync } from "fs";
 import { readFileSync } from "fs";
-import { join } from "path";
 import { getAgentDir, getSessionDir, slugify } from "./config.js";
 
 export interface ModelInfo {
@@ -42,7 +40,11 @@ export class WikiAgent {
     }
   }
 
-  async createSession(cwd: string, options?: { tools?: (string | ToolDefinition)[] }) {
+  async createSession(cwd: string, options?: {
+    tools?: (string | ToolDefinition)[];
+    /** Additional system prompt lines to append after the base system prompt */
+    appendSystemPrompt?: string[];
+  }) {
     // Filter tools into built-in and custom
     const builtInTools: string[] = [];
     const customToolsList: ToolDefinition[] = [];
@@ -61,23 +63,15 @@ export class WikiAgent {
     const sessionDir = getSessionDir(wikiSlug);
     const sessionManager = SessionManager.create(cwd, sessionDir);
 
-    // Project-level skills: use wiki-root's .llm-wiki-agent/skills (copied from agent dir during init)
-    const wikiSkillsPath = join(cwd, ".llm-wiki-agent", "skills");
-    const userSkillsPath = join(this.agentDir, "skills");
-    const skillPaths = [
-      ...(existsSync(wikiSkillsPath) ? [wikiSkillsPath] : []),
-      ...(existsSync(userSkillsPath) ? [userSkillsPath] : []),
-    ];
-
     const svc = await createAgentSessionServices({
       cwd,
       agentDir: this.agentDir,
       resourceLoaderOptions: {
         noSkills: true,
-        appendSystemPrompt: this.systemPromptLines,
-        ...(skillPaths.length > 0 && {
-          additionalSkillPaths: skillPaths,
-        }),
+        appendSystemPrompt: [
+          ...this.systemPromptLines,
+          ...(options?.appendSystemPrompt ?? []),
+        ],
       },
     });
 

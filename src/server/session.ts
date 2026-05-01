@@ -2,6 +2,7 @@
 // Manages multiple concurrent agent sessions with auto-cleanup.
 import type { WikiAgent } from "../core/agent.js";
 import { createWikiTools } from "../tools/index.js";
+import { MAIN_ROLE_PROMPT } from "../prompts/roles.js";
 
 interface SessionEntry {
   runtime: any; // AgentSessionRuntime
@@ -23,7 +24,10 @@ export class WebSessionManager {
     wikiRoot: string,
   ): Promise<{ id: string; runtime: any }> {
     const id = crypto.randomUUID();
-    const runtime = await agent.createSession(wikiRoot, { tools: createWikiTools(wikiRoot) });
+    const runtime = await agent.createSession(wikiRoot, {
+      tools: createWikiTools(wikiRoot),
+      appendSystemPrompt: [MAIN_ROLE_PROMPT],
+    });
     const now = Date.now();
     this.sessions.set(id, { runtime, createdAt: now, lastActivity: now });
     return { id, runtime };

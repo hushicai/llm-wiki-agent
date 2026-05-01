@@ -41,7 +41,7 @@ describe("createWikiDelegateTaskTool", () => {
     async () => {
       const ac = new AbortController();
       const ctx = {
-        context: { messages: [{ role: "user", content: "hi" }] },
+        context: { messages: [{ role: "user", content: [{ type: "text", text: "hi" }] }] },
       } as any;
 
       const result = await tool.execute(
@@ -68,7 +68,7 @@ describe("createWikiDelegateTaskTool", () => {
     async () => {
       const ac = new AbortController();
       const ctx = {
-        context: { messages: [{ role: "user", content: "?" }] },
+        context: { messages: [{ role: "user", content: [{ type: "text", text: "?" }] }] },
       } as any;
 
       // Use ingest agent with minimal context

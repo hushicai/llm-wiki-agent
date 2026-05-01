@@ -65,9 +65,7 @@ export function createWikiDelegateTaskTool(wikiRoot: string): ToolDefinition<any
 
       const NEUTRAL_CWD = mkdtempSync(join(tmpdir(), "wiki-subagent-"));
       const subAgent = new WikiAgent();
-      const runtime = await subAgent.createSession(NEUTRAL_CWD, {
-        appendSystemPrompt: [ROLE_PROMPTS[agent]],
-      });
+      const runtime = await subAgent.createSession(NEUTRAL_CWD);
       const session = runtime.session;
 
       // Subscribe to subagent events BEFORE prompt
@@ -113,6 +111,10 @@ export function createWikiDelegateTaskTool(wikiRoot: string): ToolDefinition<any
         }
       });
 
+      // System: base prompt (from templates/system-prompt-template.md)
+      // User[0]: role prompt (agent role definition)
+      // User[1]: user's original question
+      await session.sendUserMessage([{ type: "text", text: ROLE_PROMPTS[agent] }]);
       await session.prompt(userText);
 
       // Wait briefly for final events

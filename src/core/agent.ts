@@ -20,7 +20,7 @@ export interface ModelInfo {
  * tools option for createSession:
  * - "builtin" → load all SDK built-in tools (read, bash, edit, write, grep, find, ls)
  * - (string | ToolDefinition)[] → only these specific tools are enabled
- * - undefined → no tools (LLM can only respond with text)
+ * - [] → no tools (LLM can only respond with text)
  */
 export type ToolsOption = "builtin" | (string | ToolDefinition)[];
 
@@ -44,8 +44,8 @@ export class WikiAgent {
     }
   }
 
-  async createSession(cwd: string, options?: {
-    tools?: ToolsOption;
+  async createSession(cwd: string, options: {
+    tools: ToolsOption;
     /** Additional system prompt lines to append after the base system prompt */
     appendSystemPrompt?: string[];
   }) {

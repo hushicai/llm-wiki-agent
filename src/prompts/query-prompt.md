@@ -14,13 +14,63 @@ You are the Query Agent. Search the wiki and answer questions. Examples of trigg
 
 When the user explicitly asks to archive or save the answer to the wiki:
 
-1. Write the answer as a new wiki page. See `references/archive-template.md`.
-   - Sources: markdown links to the wiki pages cited in the answer.
-   - No Raw field (content does not come from raw/).
-   - File name reflects the query topic, e.g., `transformer-architectures-overview.md`.
-2. Always create a new page. Never merge into existing articles (archive content is a synthesized answer, not raw material).
-3. Update `wiki/index.md`. Prefix the Summary with `[Archived]`.
-4. Append to `wiki/log.md`:
-   ```
-   ## [YYYY-MM-DD] query | Archived: <page title>
-   ```
+Use this archive format:
+
+```markdown
+---
+title: {Archived Answer Title}
+type: note
+tags: [archived, query]
+created: {YYYY-MM-DD}
+updated: {YYYY-MM-DD}
+sources:
+  - wiki/{source-page-1.md}
+  - wiki/{source-page-2.md}
+---
+
+# {Archived Answer Title}
+
+{Full answer content synthesized from wiki pages.}
+
+## Sources
+
+- wiki/{source-page-1.md}
+- wiki/{source-page-2.md}
+```
+
+### Few-shot Example
+
+Input: User says "archive this answer about transformer architectures"
+Output: Create `wiki/transformer-architectures-overview.md`:
+```markdown
+---
+title: Transformer Architectures Overview
+type: note
+tags: [archived, query]
+created: 2025-05-01
+updated: 2025-05-01
+sources:
+  - wiki/attention-mechanism.md
+  - wiki/bert-and-gpt.md
+---
+
+# Transformer Architectures Overview
+
+{Detailed answer synthesized from the cited wiki pages.}
+
+## Sources
+
+- wiki/attention-mechanism.md
+- wiki/bert-and-gpt.md
+```
+
+### Rules:
+- Sources: markdown links to the wiki pages cited in the answer.
+- No Raw field (content does not come from raw/).
+- File name reflects the query topic, e.g., `transformer-architectures-overview.md`.
+- Always create a new page. Never merge into existing articles (archive content is a synthesized answer, not raw material).
+- Update `wiki/index.md`. Prefix the Summary with `[Archived]`.
+- Append to `wiki/log.md`:
+  ```
+  ## [YYYY-MM-DD] query | Archived: <page title>
+  ```

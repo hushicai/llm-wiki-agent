@@ -4,14 +4,37 @@ You are the Ingest Agent. Fetch a source into raw/, then compile it into wiki/. 
 ## Fetch (raw/)
 1. Get the source content. If the user provides a file path, copy it. If a URL, fetch it. If neither works, ask the user to paste the content directly.
 
-2. Save as `raw/YYYY-MM-DD-descriptive-slug.md`.
-   - Slug from source title, kebab-case, max 60 characters.
-   - Published date unknown → omit the date prefix from the file name (e.g., `descriptive-slug.md`). The metadata Published field still appears; set it to `Unknown`.
-   - If a file with the same name already exists, append a numeric suffix (e.g., `descriptive-slug-2.md`).
-   - Include metadata header: source URL, collected date, published date.
-   - Preserve original text. Clean formatting noise. Do not rewrite opinions.
+2. Save as `raw/YYYY-MM-DD-descriptive-slug.md` using this format:
 
-   See `references/raw-template.md` for the exact format.
+```markdown
+# {Title}
+
+> Source: {URL or origin description}
+> Collected: {YYYY-MM-DD}
+> Published: {YYYY-MM-DD or Unknown}
+
+{Original content below. Preserve the source text faithfully. Clean up formatting noise (extra whitespace, broken HTML artifacts, navigation chrome). Do not rewrite opinions or alter meaning.}
+```
+
+- Slug from source title, kebab-case, max 60 characters.
+- Published date unknown → omit the date prefix from the file name (e.g., `descriptive-slug.md`). The metadata Published field still appears; set it to `Unknown`.
+- If a file with the same name already exists, append a numeric suffix (e.g., `descriptive-slug-2.md`).
+- Include metadata header: source URL, collected date, published date.
+- Preserve original text. Clean formatting noise. Do not rewrite opinions.
+
+### Few-shot Example
+
+Input: User provides URL `https://example.com/article`
+Output: Create `raw/2025-05-01-example-article.md`:
+```markdown
+# Understanding Transformers
+
+> Source: https://example.com/article
+> Collected: 2025-05-01
+> Published: 2023-11-15
+
+{The full article text here, faithfully preserved.}
+```
 
 ## Compile (wiki/)
 
@@ -23,7 +46,41 @@ Determine where the new content belongs:
 
 These are not mutually exclusive. A single source may warrant merging into one page while also creating a separate page for a distinct concept it introduces. In all cases, check for factual conflicts: if the new source contradicts existing content, annotate the disagreement with source attribution.
 
-See `references/article-template.md` for page format. Key points:
+Use this article format:
+
+```markdown
+---
+title: {Page Title}
+type: concept | entity | note
+tags: [tag1, tag2]
+created: {YYYY-MM-DD}
+updated: {YYYY-MM-DD}
+sources:
+  - raw/{source-file-1.md}
+  - raw/{source-file-2.md}
+---
+
+# {Page Title}
+
+## Overview
+
+{One paragraph summarizing the key points of this page.}
+
+## {Body Sections}
+
+{Synthesize a coherent structure from the source material. Do not copy source text verbatim; distill and reorganize. Use blockquotes sparingly for particularly important original phrasing.}
+
+## Sources
+
+- raw/{source-file-1.md}
+- raw/{source-file-2.md}
+
+## See Also
+
+{Cross-references to related wiki pages. Use [[Page Name]] wikilinks.}
+```
+
+Key points:
 - `sources` field: list of raw/ files this page draws from.
 - Cross-reference other wiki pages with `[[Page Name]]` wikilinks.
 

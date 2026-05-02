@@ -96,8 +96,11 @@ async function main(): Promise<void> {
   });
 
   // Get positional task (for --mode json)
+  // Find the first non-option argument after --wiki <path>
+  // Known options that take a value: --wiki, --mode, --append-system-prompt
+  const knownOptionValues = new Set([wikiRoot, mode, ...appendPromptFiles]);
   const positionalIndex = args.findIndex((a) =>
-    !a.startsWith("-") && a !== "llm-wiki-agent" && a !== wikiRoot
+    !a.startsWith("-") && !knownOptionValues.has(a)
   );
   const positionalTask = positionalIndex !== -1 ? args.slice(positionalIndex).join(" ") : undefined;
 

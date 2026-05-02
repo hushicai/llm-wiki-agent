@@ -7,7 +7,6 @@ import {
   SessionManager,
   type ExtensionFactory,
 } from "@mariozechner/pi-coding-agent";
-import { existsSync } from "fs";
 import { readFileSync } from "fs";
 import { join } from "path";
 import { fileURLToPath } from "url";
@@ -41,16 +40,31 @@ function parseFrontmatter(content: string): { frontmatter: Record<string, string
   return { frontmatter, body: match[2] };
 }
 
-function loadSubagentPrompt(role: string): string[] {
+function loadMainAgentPrompt(): string | undefined {
+  const repoRoot = join(__dirname, "../.."); // src/core/ -> 项目根
+  const promptPath = join(repoRoot, "dispatcher/prompt.md");
+  try {
+    const content = readFileSync(promptPath, "utf-8");
+    return `\n${content}\n`; // SDK expects string, add padding like the old template
+  } catch {
+    return undefined;
+  }
+}
+
+function loadSubagentPrompt(role: string, wikiRoot?: string): string | undefined {
   const repoRoot = join(__dirname, "../.."); // src/core/ -> 项目根
   const agentsDir = join(repoRoot, "agents");
   const filePath = join(agentsDir, `wiki-${role}.md`);
   try {
     const content = readFileSync(filePath, "utf-8");
     const { body } = parseFrontmatter(content);
-    return body.split("\n");
+    // Replace {wikiRoot} placeholder with actual wiki path
+    if (wikiRoot) {
+      return body.replace(/\{wikiRoot\}/g, wikiRoot);
+    }
+    return body;
   } catch {
-    return [];
+    return undefined;
   }
 }
 
@@ -58,26 +72,11 @@ function loadSubagentPrompt(role: string): string[] {
 
 export class WikiAgent {
   private agentDir: string;
-  private systemPromptLines: string[];
   private cachedModels: ModelInfo[] | null;
 
   constructor() {
     this.agentDir = getAgentDir();
-    this.systemPromptLines = this.loadSystemPromptSync();
     this.cachedModels = null;
-  }
-
-  private loadSystemPromptSync(): string[] {
-    try {
-      const promptPath = new URL(
-        "../templates/system-prompt-template.md",
-        import.meta.url,
-      ).pathname;
-      const content = readFileSync(promptPath, "utf-8");
-      return ["", ...content.split("\n"), ""];
-    } catch {
-      return [];
-    }
   }
 
   async createSession(wikiRoot: string, options?: CreateSessionOptions) {
@@ -117,15 +116,23 @@ export class WikiAgent {
           extensionFactories,
         }),
 
-        // Skills 暂不支持自定义目录
-        appendSystemPrompt: [
-          ...this.systemPromptLines,
-          ...(extraPrompts ?? []),
-        ],
+        // CLI --append-system-prompt 追加到 dispatcher prompt 末尾
+        ...(extraPrompts && extraPrompts.length > 0 && {
+          appendSystemPrompt: extraPrompts,
+        }),
+
+        // 主 agent（role 为空）：显式加载 dispatcher prompt
+        ...(function () {
+          const mainPrompt = loadMainAgentPrompt();
+          if (mainPrompt && !role) {
+            return { systemPrompt: mainPrompt };
+          }
+          return undefined;
+        })(),
 
         ...(role && {
           // Subagent 模式：禁用所有 extension，传入自定义 system prompt
-          systemPrompt: loadSubagentPrompt(role),
+          systemPrompt: loadSubagentPrompt(role, wikiRoot),
         }),
       },
     });

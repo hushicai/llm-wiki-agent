@@ -107,4 +107,5 @@ await mode.run();
 - Tech stack: `docs/superpowers/specs/2026-04-29-llm-wiki-agent-tech-stack.md`
 - v1 implementation plan: `docs/superpowers/specs/2026-04-29-llm-wiki-agent-v1-plan.md`
 - v2 implementation plan: `docs/superpowers/specs/2026-04-29-llm-wiki-agent-v2-plan.md`
-- Reference docs: `references/llm-wiki.md`, `references/llm-wiki-v2.md`
+- `dispatcher/prompt.md` — 主 agent dispatcher prompt
+- `agents/wiki-*.md` — subagent prompt 定义（git 仓库管理）

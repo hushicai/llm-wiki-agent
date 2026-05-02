@@ -5,12 +5,12 @@ import {
   createAgentSessionRuntime,
   createAgentSessionServices,
   SessionManager,
-  type ExtensionFactory,
 } from "@mariozechner/pi-coding-agent";
 import { readFileSync } from "fs";
-import { join } from "path";
+import { dirname, join } from "path";
 import { fileURLToPath } from "url";
 import { getAgentDir, getSessionDir, slugify } from "./config.js";
+import { createSubagentTool } from "../tools/subagent.js";
 
 export interface ModelInfo {
   id: string;
@@ -40,8 +40,13 @@ function parseFrontmatter(content: string): { frontmatter: Record<string, string
   return { frontmatter, body: match[2] };
 }
 
+function getRepoRoot(): string {
+  const currentFile = fileURLToPath(import.meta.url);
+  return join(dirname(currentFile), "../.."); // src/core/ -> 项目根
+}
+
 function loadMainAgentPrompt(): string | undefined {
-  const repoRoot = join(__dirname, "../.."); // src/core/ -> 项目根
+  const repoRoot = getRepoRoot();
   const promptPath = join(repoRoot, "dispatcher/prompt.md");
   try {
     const content = readFileSync(promptPath, "utf-8");
@@ -52,7 +57,7 @@ function loadMainAgentPrompt(): string | undefined {
 }
 
 function loadSubagentPrompt(role: string, wikiRoot?: string): string | undefined {
-  const repoRoot = join(__dirname, "../.."); // src/core/ -> 项目根
+  const repoRoot = getRepoRoot();
   const agentsDir = join(repoRoot, "agents");
   const filePath = join(agentsDir, `wiki-${role}.md`);
   try {
@@ -82,26 +87,12 @@ export class WikiAgent {
   async createSession(wikiRoot: string, options?: CreateSessionOptions) {
     const { role, appendSystemPrompt: extraPrompts } = options ?? {};
 
-    // 仓库根目录（用于 extensions/ 和 skills/）
-    // 使用 import.meta.url 获取当前文件位置，然后回溯
     const currentFile = fileURLToPath(import.meta.url);
     const repoRoot = join(currentFile, "../.."); // src/core/ -> 项目根
-    const extensionsDir = join(repoRoot, "extensions");
 
     const wikiSlug = slugify(wikiRoot.split("/").pop() || "wiki");
     const sessionDir = getSessionDir(wikiSlug);
     const sessionManager = SessionManager.create(wikiRoot, sessionDir);
-
-    // 动态加载 wiki-subagent extension factory
-    let extensionFactories: ExtensionFactory[] = [];
-    if (!role) {
-      try {
-        const extModule = await import(join(extensionsDir, "wiki-subagent.js"));
-        extensionFactories = [extModule.default];
-      } catch {
-        // Extension 加载失败，继续运行（可能没有 wiki-subagent）
-      }
-    }
 
     const svc = await createAgentSessionServices({
       cwd: wikiRoot,
@@ -110,11 +101,6 @@ export class WikiAgent {
         // 关闭 SDK 自动发现
         noExtensions: true,
         noSkills: true,
-
-        // 显式传入 extension factories（通过动态 import）
-        ...(extensionFactories.length > 0 && {
-          extensionFactories,
-        }),
 
         // CLI --append-system-prompt 追加到 dispatcher prompt 末尾
         ...(extraPrompts && extraPrompts.length > 0 && {
@@ -157,6 +143,8 @@ export class WikiAgent {
           resourceLoader: svc.resourceLoader,
           modelRegistry: svc.modelRegistry,
           sessionManager,
+          // 主 agent：禁用内置工具，显式注册 subagent tool
+          ...(role ? {} : { noTools: "builtin", customTools: [createSubagentTool(wikiRoot)] }),
         });
         return { ...result, services: svc, diagnostics: svc.diagnostics };
       },

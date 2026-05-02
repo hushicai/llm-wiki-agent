@@ -19,6 +19,8 @@ Usage:
 Options:
   --wiki, -w <path>     Wiki root directory (required)
   --mode <mode>        Output mode: interactive (default), json
+  --role <role>        Subagent role (ingest/query/lint), loads prompt from agents/wiki-<role>.md
+  --tools <list>       Comma-separated built-in tool allowlist (e.g. read,bash,grep)
   --append-system-prompt <file>  Append file contents to system prompt (can repeat)
   --version             Show version
   --help                Show this help
@@ -72,6 +74,17 @@ async function main(): Promise<void> {
     }
   }
 
+  // Parse --tools (tool allowlist for subagent processes)
+  const toolsIndex = args.indexOf("--tools");
+  const toolsAllowlist = toolsIndex !== -1 && args[toolsIndex + 1]
+    ? args[toolsIndex + 1].split(",").map((t) => t.trim()).filter(Boolean)
+    : undefined;
+  const toolsValue = toolsAllowlist ? args[toolsIndex + 1] : undefined;
+
+  // Parse --role (subagent role, e.g. "ingest")
+  const roleIndex = args.indexOf("--role");
+  const role = roleIndex !== -1 ? args[roleIndex + 1] : undefined;
+
   // Merge appended system prompt contents
   const appendedPrompts: string[] = [];
   for (const filePath of appendPromptFiles) {
@@ -92,13 +105,14 @@ async function main(): Promise<void> {
   // Create agent and session
   const agent = new WikiAgent();
   const runtime = await agent.createSession(wikiRoot, {
+    role,
     appendSystemPrompt: appendedPrompts,
+    allowedTools: toolsAllowlist,
   });
 
   // Get positional task (for --mode json)
-  // Find the first non-option argument after --wiki <path>
-  // Known options that take a value: --wiki, --mode, --append-system-prompt
-  const knownOptionValues = new Set([wikiRoot, mode, ...appendPromptFiles]);
+  // Known options that take a value: --wiki, --mode, --append-system-prompt, --tools, --role
+  const knownOptionValues = new Set([wikiRoot, mode, ...appendPromptFiles, toolsValue, role].filter(Boolean as unknown as (v: unknown) => v is string));
   const positionalIndex = args.findIndex((a) =>
     !a.startsWith("-") && !knownOptionValues.has(a)
   );

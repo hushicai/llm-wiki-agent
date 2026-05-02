@@ -3,12 +3,16 @@
 // Agent definitions loaded from repo agents/ directory.
 import { spawn } from "node:child_process";
 import * as fs from "node:fs";
-import * as os from "node:os";
 import * as path from "node:path";
 import type { ToolDefinition } from "@mariozechner/pi-coding-agent";
 import type { AgentToolResult } from "@mariozechner/pi-agent-core";
 import type { Message } from "@mariozechner/pi-ai";
 import { Type } from "typebox";
+import {
+  logSubagentStart,
+  logSubagentEnd,
+  logSubagentError,
+} from "../utils/log.js";
 
 export type AgentScope = "user" | "project" | "both";
 
@@ -94,6 +98,11 @@ export function discoverAgents(_cwd: string, _scope: AgentScope): { agents: Agen
 
 // === CLI invocation ===
 
+function agentNameToRole(name: string): string {
+  // "wiki-ingest" → "ingest", keep as-is if no "wiki-" prefix
+  return name.startsWith("wiki-") ? name.slice(5) : name;
+}
+
 function getCliInvocation(wikiRoot: string, args: string[]): { command: string; args: string[] } {
   const currentScript = process.argv[1];
   const isBunVirtualScript = currentScript?.startsWith("/$bunfs/root/");
@@ -112,14 +121,6 @@ function getCliInvocation(wikiRoot: string, args: string[]): { command: string; 
 }
 
 // === Subagent execution ===
-
-async function writePromptToTempFile(agentName: string, prompt: string): Promise<{ dir: string; filePath: string }> {
-  const tmpDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "wiki-subagent-"));
-  const safeName = agentName.replace(/[^\w.-]+/g, "_");
-  const filePath = path.join(tmpDir, `prompt-${safeName}.md`);
-  await fs.promises.writeFile(filePath, prompt, { encoding: "utf-8", mode: 0o600 });
-  return { dir: tmpDir, filePath };
-}
 
 interface SubagentResult {
   agent: string;
@@ -143,29 +144,33 @@ async function runSingleAgent(
   const agent = agents.find((a) => a.name === agentName);
   if (!agent) {
     const available = agents.map((a) => `"${a.name}"`).join(", ") || "none";
+    const errMsg = `Unknown agent: "${agentName}". Available: ${available}.`;
+    logSubagentError(agentName, "unknown", task, errMsg, 1, "", 0);
     return {
       agent: agentName,
       agentSource: "unknown",
       task,
       exitCode: 1,
       messages: [],
-      stderr: `Unknown agent: "${agentName}". Available: ${available}.`,
+      stderr: errMsg,
     };
   }
+
+  const startTime = Date.now();
+  logSubagentStart(agent.name, agent.source, task);
 
   const args: string[] = [
     "--wiki", wikiRoot,
     "--mode", "json",
   ];
 
-  let tmpPromptDir: string | null = null;
-  let tmpPromptPath: string | null = null;
+  // Pass role to load agent prompt + prevent subagent tool registration
+  const role = agentNameToRole(agent.name);
+  args.push("--role", role);
 
-  if (agent.systemPrompt.trim()) {
-    const tmp = await writePromptToTempFile(agent.name, agent.systemPrompt);
-    tmpPromptDir = tmp.dir;
-    tmpPromptPath = tmp.filePath;
-    args.push("--append-system-prompt", tmpPromptPath);
+  // Restrict tools based on agent definition
+  if (agent.tools && agent.tools.length > 0) {
+    args.push("--tools", agent.tools.join(","));
   }
 
   args.push(task);
@@ -238,10 +243,24 @@ async function runSingleAgent(
     });
 
     currentResult.exitCode = exitCode;
+
+    const duration = Date.now() - startTime;
+    if (exitCode !== 0 || currentResult.stopReason === "error" || currentResult.errorMessage) {
+      logSubagentError(
+        agent.name, agent.source, task,
+        currentResult.errorMessage || "",
+        exitCode, currentResult.stderr, duration,
+      );
+    } else {
+      logSubagentEnd(
+        agent.name, agent.source, task,
+        exitCode, currentResult.messages.length, duration,
+      );
+    }
+
     return currentResult;
   } finally {
-    if (tmpPromptPath) try { fs.unlinkSync(tmpPromptPath); } catch { /* ignore */ }
-    if (tmpPromptDir) try { fs.rmdirSync(tmpPromptDir); } catch { /* ignore */ }
+    // No temp file cleanup needed — role-based agent loads prompt directly from repo
   }
 }
 

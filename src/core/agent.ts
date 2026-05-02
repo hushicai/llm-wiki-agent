@@ -23,6 +23,8 @@ export interface CreateSessionOptions {
   role?: string;
   /** Additional system prompt content to append */
   appendSystemPrompt?: string[];
+  /** Restrict to specific SDK built-in tool names (e.g. ["read","bash","grep"]) */
+  allowedTools?: string[];
 }
 
 // === Subagent prompt loading ===
@@ -137,14 +139,18 @@ export class WikiAgent {
 
     const runtime = await createAgentSessionRuntime(
       async (opts: any) => {
+        const toolOpts = !role
+          ? { noTools: "builtin" as const, customTools: [createSubagentTool(wikiRoot)] }
+          : options?.allowedTools
+            ? { tools: options.allowedTools }
+            : {};
         const result = await createAgentSession({
           ...opts,
           agentDir: this.agentDir,
           resourceLoader: svc.resourceLoader,
           modelRegistry: svc.modelRegistry,
           sessionManager,
-          // 主 agent：禁用内置工具，显式注册 subagent tool
-          ...(role ? {} : { noTools: "builtin", customTools: [createSubagentTool(wikiRoot)] }),
+          ...toolOpts,
         });
         return { ...result, services: svc, diagnostics: svc.diagnostics };
       },

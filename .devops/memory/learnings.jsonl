@@ -1,0 +1,1 @@
+{"type": "lesson", "session": 1, "ts": "2026-05-02T19:38Z", "source": "assess/evolve", "title": "对依赖 LLM 的集成测试采用 mock session 模式", "context": "server.test.ts 的 SSE 测试原来直接调 agent session，无 LLM 后端导致超时。改为 mock session 的 subscribe/prompt 方法后，在 51ms 内完成测试", "takeaway": "测试 SSE 流式端点不需要真实 LLM：mock session 的 subscribe 同步发射事件 + prompt 返回 Promise 即可验证全部 SSE 事件类型"}

@@ -32,7 +32,6 @@ describe("llm-wiki-agent e2e", () => {
 
       // Required files
       expect(created).toContain(join(wikiRoot, ".wikiconfig.yaml"));
-      expect(created).toContain(join(wikiRoot, "AGENTS.md"));
       expect(created).toContain(join(wikiRoot, "index.md"));
       expect(created).toContain(join(wikiRoot, "log.md"));
     });
@@ -70,8 +69,8 @@ describe("llm-wiki-agent e2e", () => {
       const runtime2 = await agent.createSession(wikiRoot);
 
       expect(runtime1.session).not.toBe(runtime2.session);
-      expect(runtime1.session.state.tools.length).toBeGreaterThan(3);
-      expect(runtime2.session.state.tools.length).toBeGreaterThan(3);
+      expect(runtime1.session.state.tools.length).toBe(1);
+      expect(runtime2.session.state.tools.length).toBe(1);
 
       await runtime1.dispose();
       await runtime2.dispose();

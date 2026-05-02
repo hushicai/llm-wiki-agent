@@ -127,6 +127,27 @@ describe("HTTP Server", () => {
   });
 
   test("POST /api/chat returns SSE stream", async () => {
+    // Mock the session to fire events synchronously in subscribe
+    const mockSession = {
+      subscribe: (handler: (event: any) => void) => {
+        // Fire all expected events synchronously
+        handler({ type: "message_update", assistantMessageEvent: { type: "text_delta", delta: "你好" } });
+        handler({ type: "message_update", assistantMessageEvent: { type: "text_delta", delta: "！" } });
+        handler({ type: "message_end" });
+        return () => {};
+      },
+      prompt: async (_msg: string) => {
+        await new Promise(r => setTimeout(r, 50));
+      },
+    };
+
+    // Mock sessionManager.create to return our mock
+    const session_id = crypto.randomUUID();
+    sessionManager.create = async () => ({
+      id: session_id,
+      runtime: { session: mockSession },
+    });
+
     const res = await fetch(`http://localhost:${port}/api/chat`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -139,6 +160,7 @@ describe("HTTP Server", () => {
     const decoder = new TextDecoder();
     let data = "";
     let hasSessionId = false;
+    let hasDelta = false;
     let hasEnd = false;
 
     while (true) {
@@ -146,10 +168,13 @@ describe("HTTP Server", () => {
       if (done) break;
       data += decoder.decode(value, { stream: true });
       if (data.includes('"type":"session_id"')) hasSessionId = true;
+      if (data.includes('"type":"delta"')) hasDelta = true;
       if (data.includes('"type":"end"')) hasEnd = true;
     }
 
     expect(hasSessionId).toBe(true);
+    expect(hasDelta).toBe(true);
+    expect(hasEnd).toBe(true);
   });
 
   test("GET /unknown returns 404", async () => {

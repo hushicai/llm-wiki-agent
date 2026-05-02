@@ -40,8 +40,7 @@
 | 约束 | 说明 |
 |------|------|
 | **完全隔离的上下文窗口** | 每个 subagent 是独立子进程，拥有独立内存上下文 |
-| **Agent 定义在 ~/.llm-wiki-agent/agents/*.md** | Subagent 从此目录发现（不同于 pi 默认的 ~/.pi/agent/agents/） |
-| **子进程命令** | 启动 `llm-wiki-agent --role <name> --system-prompt-file <file>` |
+| **Subagent 纯净模式** | `noExtensions: true` + `noSkills: true`，只有内置工具 + system prompt |
 | **内置工具读写 wikiroot** | Subagent 使用 pi 内置工具 + 自定义 system prompt |
 
 ## Subagent 进程通信协议
@@ -144,18 +143,16 @@ tools: read,bash,grep,find
 ```typescript
 // 主 agent 模式：注册 pi 的 subagent extension
 if (role === undefined) {
-  // 不注册任何自定义工具
-  // pi 的 subagent extension 会从 ~/.llm-wiki-agent/agents/ 发现 subagent
-  resourceLoaderOptions.extensionFactories = [subagentExtension];
-  // 注意：pi subagent extension 不需要额外配置，discoverAgents() 自动从标准路径发现
+  resourceLoaderOptions.extensionFactories = [wikiSubagentExtension];
 } else {
-  // Subagent 自身模式（llm-wiki-agent --role ingest 等）
+  // Subagent 自身模式：禁用所有扩展和 skills，只有内置工具 + 自定义 system prompt
+  resourceLoaderOptions.noExtensions = true;
+  resourceLoaderOptions.noSkills = true;
   resourceLoaderOptions.systemPrompt = loadSubagentPrompt(role);
-  // 不注册 subagent extension
 }
 ```
 
-**注意**：`subagentExtension` 来自 pi SDK 内置（`examples/extensions/subagent/index.ts`）。需要将其源码或打包引入到 llm-wiki-agent 中，或者直接使用文件路径注册。
+**关键约束**：subagent 必须 `noExtensions: true`，否则会看到主 agent 注册的 `subagent` 工具，形成循环。
 
 ### 7. Subagent Agent 定义文件
 
@@ -270,6 +267,7 @@ tools: read,write,bash,grep
 - `wiki-subagent.ts` 是基于 pi SDK subagent extension 改编的扩展，注册一个 `subagent` 工具
 - 子进程命令改为 `llm-wiki-agent --mode json --wiki <path> --append-system-prompt <file> <task>`
 - 发现路径改为 `~/.llm-wiki-agent/agents/`，而非默认的 `~/.pi/agent/agents/`
+- **关键**：subagent CLI 以 `noExtensions: true` + `noSkills: true` 启动，避免看到 `subagent` 工具
 
 ## 实现顺序
 

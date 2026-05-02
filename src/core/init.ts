@@ -14,7 +14,8 @@ export interface WikiConfig {
 /**
  * Scan a wiki root for existing content directories (subdirectories that aren't system dirs).
  */
-async function getContentDirs(wikiRoot: string): Promise<string[]> {
+/** @internal exported for testing */
+export async function getContentDirs(wikiRoot: string): Promise<string[]> {
   try {
     const entries = await readdir(wikiRoot, { withFileTypes: true });
     const systemDirs = new Set([".wiki", "raw", "wiki", ".devops"]);
@@ -27,7 +28,8 @@ async function getContentDirs(wikiRoot: string): Promise<string[]> {
   }
 }
 
-function buildStructureDiagram(dirs: string[]): string {
+/** @internal exported for testing */
+export function buildStructureDiagram(dirs: string[]): string {
   if (dirs.length === 0) {
     return `<wiki-root>/
 ├── index.md            # Page index (auto-maintained)

@@ -14,6 +14,7 @@ import {
   logSubagentError,
 } from "../utils/log.js";
 import { getRepoRoot } from "../utils/resolve.js";
+import { parseFrontmatter } from "../utils/frontmatter.js";
 
 export interface AgentConfig {
   name: string;
@@ -25,19 +26,6 @@ export interface AgentConfig {
 }
 
 // === Agent discovery (从仓库 agents/ 读取) ===
-
-function parseFrontmatter(content: string): { frontmatter: Record<string, string>; body: string } {
-  const match = content.match(/^---\n([\s\S]*?)\n---\n([\s\S]*)$/);
-  if (!match) return { frontmatter: {}, body: content };
-  const frontmatter: Record<string, string> = {};
-  for (const line of match[1].split("\n")) {
-    const [key, ...rest] = line.split(":");
-    if (key && rest.length > 0) {
-      frontmatter[key.trim()] = rest.join(":").trim();
-    }
-  }
-  return { frontmatter, body: match[2] };
-}
 
 function loadAgentsFromDir(dir: string): AgentConfig[] {
   const agents: AgentConfig[] = [];
@@ -58,16 +46,17 @@ function loadAgentsFromDir(dir: string): AgentConfig[] {
       continue;
     }
     const { frontmatter, body } = parseFrontmatter(content);
-    if (!frontmatter.name || !frontmatter.description) continue;
-    const tools = frontmatter.tools
+    const fm = frontmatter as Record<string, string>;
+    if (!fm.name || !fm.description) continue;
+    const tools = fm.tools
       ?.split(",")
       .map((t: string) => t.trim())
       .filter(Boolean);
     agents.push({
-      name: frontmatter.name,
-      description: frontmatter.description,
+      name: fm.name,
+      description: fm.description,
       tools: tools && tools.length > 0 ? tools : undefined,
-      model: frontmatter.model,
+      model: fm.model,
       systemPrompt: body,
       filePath,
     });

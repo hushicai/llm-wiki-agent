@@ -11,6 +11,7 @@ import { join } from "path";
 import { getAgentDir, getSessionDir, slugify } from "./config.js";
 import { getRepoRoot } from "../utils/resolve.js";
 import { createSubagentTool } from "../tools/subagent.js";
+import { parseFrontmatter } from "../utils/frontmatter.js";
 
 export interface ModelInfo {
   id: string;
@@ -28,19 +29,6 @@ export interface CreateSessionOptions {
 }
 
 // === Subagent prompt loading ===
-
-function parseFrontmatter(content: string): { frontmatter: Record<string, string>; body: string } {
-  const match = content.match(/^---\n([\s\S]*?)\n---\n([\s\S]*)$/);
-  if (!match) return { frontmatter: {}, body: content };
-  const frontmatter: Record<string, string> = {};
-  for (const line of match[1].split("\n")) {
-    const [key, ...rest] = line.split(":");
-    if (key && rest.length > 0) {
-      frontmatter[key.trim()] = rest.join(":").trim();
-    }
-  }
-  return { frontmatter, body: match[2] };
-}
 
 function loadMainAgentPrompt(): string | undefined {
   const repoRoot = getRepoRoot();

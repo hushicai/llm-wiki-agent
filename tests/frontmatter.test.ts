@@ -1,6 +1,6 @@
 // Frontmatter utility tests
 import { describe, expect, test } from "bun:test";
-import { parseFrontmatter, stripFrontmatter, formatFrontmatter, mergeFrontmatter } from "../src/core/frontmatter.js";
+import { parseFrontmatter, stripFrontmatter, formatFrontmatter, mergeFrontmatter } from "../src/utils/frontmatter.js";
 
 describe("parseFrontmatter", () => {
   test("parses YAML frontmatter with --- delimiters", () => {
@@ -11,17 +11,17 @@ tags: [test, demo]
 ---
 Page content here.`;
     const result = parseFrontmatter(content);
-    expect(result).not.toBeNull();
-    expect(result!.frontmatter.title).toBe("Test Page");
-    expect(result!.frontmatter.type).toBe("concept");
-    expect(result!.frontmatter.tags).toEqual(["test", "demo"]);
-    expect(result!.content.trim()).toBe("Page content here.");
+    expect(result.frontmatter.title).toBe("Test Page");
+    expect(result.frontmatter.type).toBe("concept");
+    expect(result.frontmatter.tags).toEqual(["test", "demo"]);
+    expect(result.body.trim()).toBe("Page content here.");
   });
 
-  test("returns null for content without frontmatter", () => {
+  test("returns empty frontmatter for content without frontmatter", () => {
     const content = "# Just a heading\n\nSome content.";
     const result = parseFrontmatter(content);
-    expect(result).toBeNull();
+    expect(result.frontmatter).toEqual({});
+    expect(result.body.trim()).toBe("# Just a heading\n\nSome content.");
   });
 
   test("handles empty frontmatter", () => {
@@ -29,9 +29,8 @@ Page content here.`;
 ---
 Content after empty frontmatter.`;
     const result = parseFrontmatter(content);
-    expect(result).not.toBeNull();
-    expect(result!.frontmatter).toEqual({});
-    expect(result!.content.trim()).toBe("Content after empty frontmatter.");
+    expect(result.frontmatter).toEqual({});
+    expect(result.body.trim()).toBe("Content after empty frontmatter.");
   });
 
   test("handles content with no trailing newline after ---", () => {
@@ -40,9 +39,8 @@ title: No Newline
 ---
 Content`;
     const result = parseFrontmatter(content);
-    expect(result).not.toBeNull();
-    expect(result!.frontmatter.title).toBe("No Newline");
-    expect(result!.content.trim()).toBe("Content");
+    expect(result.frontmatter.title).toBe("No Newline");
+    expect(result.body.trim()).toBe("Content");
   });
 });
 

@@ -17,8 +17,15 @@ const MIME_TYPES: Record<string, string> = {
   ".ico": "image/x-icon",
 };
 
-function parseArgs() {
-  const args = process.argv.slice(2);
+/** @internal exported for testing */
+export interface ServerArgs {
+  wikiRoot: string;
+  port: number;
+  host: string;
+}
+
+/** @internal exported for testing */
+export function parseServerArgs(args: string[]): ServerArgs {
   let wikiRoot = process.cwd();
   let port = 3000;
   let host = "0.0.0.0";
@@ -28,20 +35,12 @@ function parseArgs() {
     else if (args[i] === "--port" || args[i] === "-p")
       port = parseInt(args[++i], 10);
     else if (args[i] === "--host") host = args[++i];
-    else if (args[i] === "--help" || args[i] === "-h") {
-      console.log(`llm-wiki-agent server
-
-Usage: bun run src/server.ts [options]
-
-Options:
-  --wiki, -w <path>   Wiki root directory (default: cwd)
-  --port, -p <number> HTTP port (default: 3000)
-  --host <address>    Listen address (default: 0.0.0.0)
-  --help              Show this help`);
-      process.exit(0);
-    }
   }
   return { wikiRoot, port, host };
+}
+
+function parseArgs() {
+  return parseServerArgs(process.argv.slice(2));
 }
 
 async function main() {

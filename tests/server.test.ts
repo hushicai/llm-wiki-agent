@@ -6,6 +6,7 @@ import { tmpdir } from "os";
 import { WikiAgent } from "../src/core/agent.js";
 import { WebSessionManager } from "../src/server/session.js";
 import { ensureWiki } from "../src/core/init.js";
+import { parseServerArgs } from "../src/server.js";
 
 const testDir = join(tmpdir(), "llm-wiki-agent-server-test");
 const wikiRoot = join(testDir, "wiki");
@@ -180,5 +181,46 @@ describe("HTTP Server", () => {
   test("GET /unknown returns 404", async () => {
     const res = await fetch(`http://localhost:${port}/unknown`);
     expect(res.status).toBe(404);
+  });
+});
+
+describe("parseServerArgs", () => {
+  test("returns defaults with empty args", () => {
+    const result = parseServerArgs([]);
+    expect(result.port).toBe(3000);
+    expect(result.host).toBe("0.0.0.0");
+    expect(result.wikiRoot).toBe(process.cwd());
+  });
+
+  test("parses --wiki flag", () => {
+    const result = parseServerArgs(["--wiki", "/tmp/test-wiki"]);
+    expect(result.wikiRoot).toBe("/tmp/test-wiki");
+  });
+
+  test("parses -w short flag", () => {
+    const result = parseServerArgs(["-w", "/tmp/test-wiki"]);
+    expect(result.wikiRoot).toBe("/tmp/test-wiki");
+  });
+
+  test("parses --port flag", () => {
+    const result = parseServerArgs(["--port", "8080"]);
+    expect(result.port).toBe(8080);
+  });
+
+  test("parses -p short flag", () => {
+    const result = parseServerArgs(["-p", "9090"]);
+    expect(result.port).toBe(9090);
+  });
+
+  test("parses --host flag", () => {
+    const result = parseServerArgs(["--host", "127.0.0.1"]);
+    expect(result.host).toBe("127.0.0.1");
+  });
+
+  test("parses multiple flags", () => {
+    const result = parseServerArgs(["--wiki", "/data/wiki", "--port", "4000", "--host", "0.0.0.0"]);
+    expect(result.wikiRoot).toBe("/data/wiki");
+    expect(result.port).toBe(4000);
+    expect(result.host).toBe("0.0.0.0");
   });
 });

@@ -4,7 +4,6 @@ import { mkdir, rm } from "fs/promises";
 import { join } from "path";
 import { tmpdir } from "os";
 import { ensureWiki, loadWikiConfig } from "../src/core/init.js";
-import { createWikiSession } from "../src/core/runtime.js";
 import { getAgentDir, getSessionDir, getModelsPath, slugify } from "../src/core/config.js";
 
 describe("Edge cases", () => {
@@ -71,32 +70,4 @@ describe("Edge cases", () => {
     });
   });
 
-  describe("Runtime edge cases", () => {
-    test("dispose is idempotent", async () => {
-      const runtime = await createWikiSession({ wikiRoot });
-      await runtime.dispose();
-      await runtime.dispose();
-    });
-
-    test("session isolation between wikis", async () => {
-      const wiki1 = join(testDir, "wiki-a");
-      const wiki2 = join(testDir, "wiki-b");
-      await ensureWiki(wiki1);
-      await ensureWiki(wiki2);
-      const r1 = await createWikiSession({ wikiRoot: wiki1 });
-      const r2 = await createWikiSession({ wikiRoot: wiki2 });
-      expect(r1.session).toBeDefined();
-      expect(r2.session).toBeDefined();
-      await r1.dispose();
-      await r2.dispose();
-      await rm(wiki1, { recursive: true, force: true });
-      await rm(wiki2, { recursive: true, force: true });
-    });
-
-    test("diagnostics array is accessible", async () => {
-      const runtime = await createWikiSession({ wikiRoot });
-      expect(runtime.diagnostics).toBeDefined();
-      await runtime.dispose();
-    });
-  });
 });

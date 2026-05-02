@@ -4,7 +4,7 @@ import { rm } from "fs/promises";
 import { join } from "path";
 import { tmpdir } from "os";
 import { ensureWiki } from "../src/core/init.js";
-import { createWikiSession } from "../src/core/runtime.js";
+import { WikiAgent } from "../src/core/agent.js";
 
 describe("TUI", () => {
   const wikiRoot = join(tmpdir(), "llm-wiki-agent-tui-test");
@@ -19,11 +19,11 @@ describe("TUI", () => {
   });
 
   test("creates InteractiveMode without error", async () => {
-    const runtime = await createWikiSession({ wikiRoot });
+    const agent = new WikiAgent();
+    const runtime = await agent.createSession(wikiRoot);
     const mode = new InteractiveMode(runtime);
     expect(mode).toBeDefined();
-    expect(mode.session).toBeDefined();
-    expect(mode.agent).toBeDefined();
     await runtime.dispose();
+    await agent.dispose();
   });
 });

@@ -71,21 +71,18 @@ export function writeToolLog(entry: ToolLogEntry): void {
 // Convenience: subagent lifecycle events
 export function logSubagentStart(
   agentName: string,
-  agentSource: string,
   task: string,
 ): void {
   writeToolLog({
     ts: new Date().toISOString(),
     event: "subagent_start",
     agent: agentName,
-    agentSource,
     task: truncate(task, 200),
   });
 }
 
 export function logSubagentEnd(
   agentName: string,
-  agentSource: string,
   task: string,
   exitCode: number,
   messageCount: number,
@@ -95,7 +92,6 @@ export function logSubagentEnd(
     ts: new Date().toISOString(),
     event: "subagent_end",
     agent: agentName,
-    agentSource,
     task: truncate(task, 200),
     exitCode,
     messageCount,
@@ -105,7 +101,6 @@ export function logSubagentEnd(
 
 export function logSubagentError(
   agentName: string,
-  agentSource: string,
   task: string,
   errorMessage: string,
   exitCode: number,
@@ -116,7 +111,6 @@ export function logSubagentError(
     ts: new Date().toISOString(),
     event: "subagent_error",
     agent: agentName,
-    agentSource,
     task: truncate(task, 200),
     errorMessage: truncate(errorMessage, 500),
     exitCode,

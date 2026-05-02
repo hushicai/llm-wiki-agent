@@ -15,15 +15,12 @@ import {
 } from "../utils/log.js";
 import { getRepoRoot } from "../utils/resolve.js";
 
-export type AgentScope = "user" | "project" | "both";
-
 export interface AgentConfig {
   name: string;
   description: string;
   tools?: string[];
   model?: string;
   systemPrompt: string;
-  source: "user" | "project";
   filePath: string;
 }
 
@@ -42,7 +39,7 @@ function parseFrontmatter(content: string): { frontmatter: Record<string, string
   return { frontmatter, body: match[2] };
 }
 
-function loadAgentsFromDir(dir: string, source: "user" | "project"): AgentConfig[] {
+function loadAgentsFromDir(dir: string): AgentConfig[] {
   const agents: AgentConfig[] = [];
   if (!fs.existsSync(dir)) return agents;
   let entries: fs.Dirent[];
@@ -72,7 +69,6 @@ function loadAgentsFromDir(dir: string, source: "user" | "project"): AgentConfig
       tools: tools && tools.length > 0 ? tools : undefined,
       model: frontmatter.model,
       systemPrompt: body,
-      source,
       filePath,
     });
   }
@@ -81,11 +77,11 @@ function loadAgentsFromDir(dir: string, source: "user" | "project"): AgentConfig
 
 // === Agent discovery ===
 
-export function discoverAgents(_cwd: string, _scope: AgentScope): { agents: AgentConfig[]; projectAgentsDir: string | null } {
+export function discoverAgents(_cwd: string): { agents: AgentConfig[]; projectAgentsDir: string | null } {
   const repoRoot = getRepoRoot();
   const agentsDir = path.join(repoRoot, "agents");
-  const userAgents = loadAgentsFromDir(agentsDir, "user");
-  return { agents: userAgents, projectAgentsDir: null };
+  const projectAgents = loadAgentsFromDir(agentsDir);
+  return { agents: projectAgents, projectAgentsDir: null };
 }
 
 // === CLI invocation ===
@@ -116,7 +112,6 @@ function getCliInvocation(wikiRoot: string, args: string[]): { command: string; 
 
 interface SubagentResult {
   agent: string;
-  agentSource: "user" | "project" | "unknown";
   task: string;
   exitCode: number;
   messages: Message[];
@@ -137,10 +132,9 @@ async function runSingleAgent(
   if (!agent) {
     const available = agents.map((a) => `"${a.name}"`).join(", ") || "none";
     const errMsg = `Unknown agent: "${agentName}". Available: ${available}.`;
-    logSubagentError(agentName, "unknown", task, errMsg, 1, "", 0);
+    logSubagentError(agentName, task, errMsg, 1, "", 0);
     return {
       agent: agentName,
-      agentSource: "unknown",
       task,
       exitCode: 1,
       messages: [],
@@ -149,7 +143,7 @@ async function runSingleAgent(
   }
 
   const startTime = Date.now();
-  logSubagentStart(agent.name, agent.source, task);
+  logSubagentStart(agent.name, task);
 
   const args: string[] = [
     "--wiki", wikiRoot,
@@ -169,7 +163,6 @@ async function runSingleAgent(
 
   const currentResult: SubagentResult = {
     agent: agentName,
-    agentSource: agent.source,
     task,
     exitCode: 0,
     messages: [],
@@ -239,13 +232,13 @@ async function runSingleAgent(
     const duration = Date.now() - startTime;
     if (exitCode !== 0 || currentResult.stopReason === "error" || currentResult.errorMessage) {
       logSubagentError(
-        agent.name, agent.source, task,
+        agent.name, task,
         currentResult.errorMessage || "",
         exitCode, currentResult.stderr, duration,
       );
     } else {
       logSubagentEnd(
-        agent.name, agent.source, task,
+        agent.name, task,
         exitCode, currentResult.messages.length, duration,
       );
     }
@@ -271,7 +264,7 @@ export function createSubagentTool(wikiRoot: string): ToolDefinition {
     parameters: SubagentParams,
 
     async execute(_toolCallId, params, signal, onUpdate) {
-      const discovery = discoverAgents(wikiRoot, "user");
+      const discovery = discoverAgents(wikiRoot);
       const agents = discovery.agents;
 
       if (!params.agent || !params.task) {

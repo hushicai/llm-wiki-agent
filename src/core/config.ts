@@ -3,7 +3,7 @@
 import { join } from "path";
 import { homedir } from "os";
 
-export const AGENT_DIR = join(homedir(), ".llm-wiki-agent");
+export const AGENT_DIR = join(homedir(), ".llm-wiki-agent", 'agent');
 
 export function getAgentDir(): string {
   return AGENT_DIR;

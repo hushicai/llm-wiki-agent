@@ -5,10 +5,12 @@ import {
   createAgentSessionRuntime,
   createAgentSessionServices,
   SessionManager,
+  type ExtensionFactory,
 } from "@mariozechner/pi-coding-agent";
 import { existsSync } from "fs";
 import { readFileSync } from "fs";
 import { join } from "path";
+import { fileURLToPath } from "url";
 import { getAgentDir, getSessionDir, slugify } from "./config.js";
 
 export interface ModelInfo {
@@ -82,7 +84,9 @@ export class WikiAgent {
     const { role, appendSystemPrompt: extraPrompts } = options ?? {};
 
     // 仓库根目录（用于 extensions/ 和 skills/）
-    const repoRoot = join(__dirname, "../.."); // src/core/ -> 项目根
+    // 使用 import.meta.url 获取当前文件位置，然后回溯
+    const currentFile = fileURLToPath(import.meta.url);
+    const repoRoot = join(currentFile, "../.."); // src/core/ -> 项目根
     const extensionsDir = join(repoRoot, "extensions");
     const skillsDir = join(repoRoot, "skills");
 
@@ -90,18 +94,31 @@ export class WikiAgent {
     const sessionDir = getSessionDir(wikiSlug);
     const sessionManager = SessionManager.create(wikiRoot, sessionDir);
 
+    // 动态加载 wiki-subagent extension factory
+    let extensionFactories: ExtensionFactory[] = [];
+    if (!role) {
+      try {
+        const extModule = await import(join(extensionsDir, "wiki-subagent.js"));
+        extensionFactories = [extModule.default];
+      } catch {
+        // Extension 加载失败，继续运行（可能没有 wiki-subagent）
+      }
+    }
+
     const svc = await createAgentSessionServices({
       cwd: wikiRoot,
       agentDir: this.agentDir,
       resourceLoaderOptions: {
-        // 关闭 SDK 自动发现，全部自己管理
+        // 关闭 SDK 自动发现
         noExtensions: true,
         noSkills: true,
 
-        // 显式传入仓库 extensions/ + skills/
-        ...(existsSync(extensionsDir) && !role && {
-          additionalExtensionPaths: [extensionsDir],
+        // 显式传入 extension factories（通过动态 import）
+        ...(extensionFactories.length > 0 && {
+          extensionFactories,
         }),
+
+        // Skills 使用 additionalSkillPaths（SDK 能正确处理目录）
         ...(existsSync(skillsDir) && !role && {
           additionalSkillPaths: [skillsDir],
         }),
@@ -113,7 +130,6 @@ export class WikiAgent {
 
         ...(role && {
           // Subagent 模式：禁用所有 extension，传入自定义 system prompt
-          noExtensions: true,
           systemPrompt: loadSubagentPrompt(role),
         }),
       },

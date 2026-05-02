@@ -86,4 +86,80 @@ describe("llm-wiki-agent e2e", () => {
       await agent.dispose();
     });
   });
+
+  describe("WikiAgent.getModels", () => {
+    test("returns empty array before any session", () => {
+      const agent = new WikiAgent();
+      expect(agent.getModels()).toEqual([]);
+      agent.dispose();
+    });
+
+    test("returns cached models after createSession", async () => {
+      const agent = new WikiAgent();
+      await agent.createSession(wikiRoot);
+      const models = agent.getModels();
+      expect(Array.isArray(models)).toBe(true);
+      if (models.length > 0) {
+        expect(models[0].id).toBeDefined();
+        expect(models[0].provider).toBeDefined();
+      }
+      await agent.dispose();
+    });
+
+    test("returns empty array after dispose", async () => {
+      const agent = new WikiAgent();
+      await agent.createSession(wikiRoot);
+      await agent.dispose();
+      expect(agent.getModels()).toEqual([]);
+    });
+  });
+
+  describe("createSession with role", () => {
+    test("creates session with valid role (ingest)", async () => {
+      const agent = new WikiAgent();
+      const runtime = await agent.createSession(wikiRoot, { role: "ingest" });
+      expect(runtime).toBeDefined();
+      expect(runtime.session).toBeDefined();
+      await runtime.dispose();
+      await agent.dispose();
+    });
+
+    test("creates session with valid role (query)", async () => {
+      const agent = new WikiAgent();
+      const runtime = await agent.createSession(wikiRoot, { role: "query" });
+      expect(runtime).toBeDefined();
+      await runtime.dispose();
+      await agent.dispose();
+    });
+
+    test("creates session with role and allowedTools", async () => {
+      const agent = new WikiAgent();
+      const runtime = await agent.createSession(wikiRoot, {
+        role: "query",
+        allowedTools: ["read", "search"],
+      });
+      expect(runtime).toBeDefined();
+      expect(runtime.session).toBeDefined();
+      await runtime.dispose();
+      await agent.dispose();
+    });
+
+    test("creates session without role does not throw", async () => {
+      const agent = new WikiAgent();
+      const runtime = await agent.createSession(wikiRoot);
+      expect(runtime).toBeDefined();
+      await runtime.dispose();
+      await agent.dispose();
+    });
+
+    test("creates session with appendSystemPrompt", async () => {
+      const agent = new WikiAgent();
+      const runtime = await agent.createSession(wikiRoot, {
+        appendSystemPrompt: ["Extra context for the agent"],
+      });
+      expect(runtime).toBeDefined();
+      await runtime.dispose();
+      await agent.dispose();
+    });
+  });
 });

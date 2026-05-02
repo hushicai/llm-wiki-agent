@@ -28,11 +28,10 @@
   │ Subagent │ │ Subagent │ │ Subagent │
   └────┬─────┘ └────┬─────┘ └────┬─────┘
        │            │            │
-  tools:         tools:       tools:
-  wiki_read    wiki_read    wiki_read
-  wiki_write   wiki_search  wiki_write
-  wiki_list    wiki_list    wiki_lint
-               wiki_lint
+   tools:         tools:       tools:
+   pi built-in   pi built-in  pi built-in
+   (read/write/  (read/grep/  (read/write/
+    bash/grep)    find/ls)     bash/grep)
   SysPrompt:   SysPrompt:   SysPrompt:
   ingest.md    query.md     lint.md
 ```
@@ -143,88 +142,24 @@ export async function runSubagentMode(options: SubagentOptions) {
 
 关键点：`createWikiSession` 需要支持传入自定义 system prompt 和 role。
 
-### 3. Wiki 工具实现（`src/core/extensions/wiki-tools.ts`）
-
-**关键决策**：wiki 工具必须作为自定义工具注册（`ExtensionFactory`），不能依赖 pi 内置工具（read/write/bash）。
-
-原因：subagent 需要完全隔离的工具集，只能操作 wikiroot。pi 内置工具可以操作任意文件，不符合安全边界。
+### 3. WikiAgent 改造（`src/core/agent.ts`）
 
 ```typescript
-// src/core/extensions/wiki-tools.ts
+// WikiAgent.createSession(role) 模式：
+// - 主 agent（role=undefined）：注册 wiki_dispatch 扩展
+// - subagent（role=ingest|query|lint）：使用 pi 内置工具 + 自定义 system prompt
 
-// wiki_read — 读取 wiki 或 raw 下的文件
-const wikiReadTool: ToolDefinition = {
-  name: "wiki_read",
-  label: "Wiki Read",
-  description: "读取 wiki/ 或 raw/ 目录下的文件内容",
-  parameters: WikiReadParams,  // { path, offset?, limit?, mode?: "wiki"|"raw" }
-  async execute(_id, params) {
-    const { path, mode = "wiki" } = params;
-    const baseDir = mode === "raw" ? join(wikiRoot, "raw") : join(wikiRoot, "wiki");
-    const content = await readFile(join(baseDir, path), "utf-8");
-    return { content, truncated: content.length > 10000 };
-  },
-};
-
-// wiki_write — 创建或更新 wiki 条目
-const wikiWriteTool: ToolDefinition = { ... };
-
-// wiki_search — 全文检索
-const wikiSearchTool: ToolDefinition = { ... };
-
-// wiki_list — 列出目录结构
-const wikiListTool: ToolDefinition = { ... };
-
-// wiki_ingest — 将 raw 文件摄入为 wiki 条目
-const wikiIngestTool: ToolDefinition = { ... };
-
-// wiki_lint — 批量检查 wiki 问题
-const wikiLintTool: ToolDefinition = { ... };
-
-// 导出按角色分组的工具集
-export const TOOLS_BY_ROLE = {
-  ingest: [wikiReadTool, wikiWriteTool, wikiListTool, wikiIngestTool],
-  query: [wikiReadTool, wikiSearchTool, wikiListTool, wikiLintTool],
-  lint: [wikiReadTool, wikiWriteTool, wikiLintTool],
-};
-```
-
-### 4. WikiAgent 改造（`src/core/agent.ts`）
-
-```typescript
-interface CreateSessionOptions {
-  wikiRoot: string;
-  systemPrompt?: string[];   // 新增：自定义 system prompt
-  role?: "ingest" | "query" | "lint";  // 新增：角色标识
-}
-
-// createSession 根据 role 注册不同工具集
-if (role) {
-  // Subagent 模式：注册 wiki 自定义工具（不使用 pi 内置工具）
-  const wikiTools = TOOLS_BY_ROLE[role];
-  resourceLoaderOptions.extensionFactories = [
-    wikiToolsExtension(wikiRoot, role),  // 传入 wikiRoot 和 role
-  ];
+if (role === undefined) {
+  // 主 agent 模式：注册分发工具
+  resourceLoaderOptions.extensionFactories = [dispatcherExtension(wikiRoot)];
+} else {
+  // Subagent 模式：注册自定义 system prompt
+  resourceLoaderOptions.systemPrompt = loadSubagentPrompt(role);
+  // 不注册任何扩展，subagent 使用 pi 内置工具
 }
 ```
 
-**注意**：当前 `createWikiSession` 使用 `noSkills: true` 阻止外部 skills。subagent 模式下也需要保持这个设置，保证 subagent 只使用注册的自定义 wiki 工具。
-
-### 5. 工具参数复用（`src/types.ts`）
-
-现有 `types.ts` 中已定义工具参数类型：
-
-```typescript
-// 复用现有类型
-export const WikiReadParams = Type.Object({ ... });
-export const WikiWriteParams = Type.Object({ ... });
-export const WikiSearchParams = Type.Object({ ... });
-export const WikiListParams = Type.Object({ ... });
-export const WikiIngestParams = Type.Object({ ... });
-export const WikiLintParams = Type.Object({ ... });
-```
-
-`wiki-tools.ts` 直接导入这些类型，保持类型定义单一来源。
+**注意**：`createWikiSession` 当前用 `noSkills: true` 阻止外部 skills。Subagent 需要保持这个设置，保证只使用 pi 内置工具，不受 skills 干扰。
 
 ### 6. Subagent 分发工具（`src/core/extensions/dispatcher.ts`）
 
@@ -289,11 +224,11 @@ resourceLoaderOptions: {
 
 ## 核心职责
 将原始资料（raw/ 下的文件）转化为结构化 wiki 知识。
-
 ## 工具使用规则
-- wiki_read：读取 raw/ 下的源文件
-- wiki_write：创建 wiki/ 下的结构化文档
-- wiki_list：查看当前 wiki 结构
+
+- 使用 pi 内置工具（read/write/grep/find/ls/bash）操作文件
+- 所有操作限制在 wiki 根目录下
+- 工作目录：`{wikiRoot}`
 
 ## 工作流程
 1. 读取源文件，理解内容
@@ -314,12 +249,11 @@ resourceLoaderOptions: {
 
 ## 核心职责
 在 wiki 中检索知识，回答用户问题。
-
 ## 工具使用规则
-- wiki_search：全文检索 wiki 内容
-- wiki_read：读取具体条目
-- wiki_list：了解 wiki 结构
-- wiki_lint：检查引用完整性（可选）
+
+- 使用 pi 内置工具（read/write/grep/find/ls）检索内容
+- 所有操作限制在 wiki 根目录下
+- 工作目录：`{wikiRoot}`
 
 ## 回答要求
 - 必须先检索 wiki，再作答
@@ -339,11 +273,11 @@ resourceLoaderOptions: {
 
 ## 核心职责
 检查 wiki 结构完整性和内容质量。
-
 ## 工具使用规则
-- wiki_read：读取条目内容
-- wiki_write：修复发现的问题
-- wiki_lint：批量检查问题
+
+- 使用 pi 内置工具（read/write/grep/find/ls/bash）检查和修复文件
+- 所有操作限制在 wiki 根目录下
+- 工作目录：`{wikiRoot}`
 
 ## 检查项
 - orphan：被引用但不存在
@@ -368,19 +302,16 @@ resourceLoaderOptions: {
  src/
 +├── subagent.ts                          ← Subagent 进程运行逻辑（JSON 行流）
 +├── core/
-+│   ├── agent.ts                         ← WikiAgent.createSession() 支持 role/systemPrompt
 +│   └── extensions/
-+│       ├── wiki-tools.ts                ← 自定义 wiki 工具（wiki_read/write/search/list/ingest/lint）
 +│       └── dispatcher.ts                ← ExtensionFactory：wiki_dispatch 工具
 +├── templates/
 +│   ├── subagent-ingest-prompt.md        ← Ingest subagent system prompt
 +│   ├── subagent-query-prompt.md         ← Query subagent system prompt
 +│   └── subagent-lint-prompt.md          ← Lint subagent system prompt
-+└── types.ts                             ← 复用现有工具参数类型
- src/
   ├── cli.ts                              ← 支持 --role/--query/--system-prompt 参数
   └── core/
-      └── runtime.ts                      ← createWikiSession 支持 systemPrompt/role 参数
+      ├── agent.ts                        ← WikiAgent.createSession() 支持 role
+      └── runtime.ts                      ← createWikiSession 支持 role/systemPrompt
 ```
 
 ## 实现顺序

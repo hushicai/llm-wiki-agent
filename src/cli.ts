@@ -1,6 +1,7 @@
 #!/usr/bin/env bun
 // CLI entry point — wiki agent
-import { InteractiveMode } from "@mariozechner/pi-coding-agent";
+import { InteractiveMode, runPrintMode } from "@mariozechner/pi-coding-agent";
+import { existsSync, readFileSync } from "fs";
 import { WikiAgent } from "./core/agent.js";
 import { ensureWiki } from "./core/init.js";
 
@@ -11,17 +12,21 @@ llm-wiki-agent — Wiki Knowledge Agent CLI
 Usage:
   llm-wiki-agent --wiki <path>        Interactive mode (auto-inits if needed)
   echo "query" | llm-wiki-agent --wiki <path>   Pipeline query
+  llm-wiki-agent --wiki <path> --mode json --append-system-prompt <file> <task>  Subagent mode
   llm-wiki-agent --version            Show version
   llm-wiki-agent --help               Show this help
 
 Options:
   --wiki, -w <path>     Wiki root directory (required)
+  --mode <mode>        Output mode: interactive (default), json
+  --append-system-prompt <file>  Append file contents to system prompt (can repeat)
   --version             Show version
   --help                Show this help
 
 Examples:
   llm-wiki-agent --wiki ./my-wiki
   echo "What is React?" | llm-wiki-agent --wiki ./research
+  llm-wiki-agent --wiki ./wiki --mode json --append-system-prompt ./agents/wiki-query.md "search for ai agents"
 `);
 }
 
@@ -53,10 +58,55 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
+  // Parse --mode
+  const modeIndex = args.indexOf("--mode");
+  const mode = modeIndex !== -1 ? args[modeIndex + 1] : undefined;
+  const isJsonMode = mode === "json";
+
+  // Parse --append-system-prompt (can repeat)
+  const appendPromptFiles: string[] = [];
+  for (let i = 0; i < args.length; i++) {
+    if (args[i] === "--append-system-prompt" && i + 1 < args.length) {
+      appendPromptFiles.push(args[i + 1]);
+      i++;
+    }
+  }
+
+  // Merge appended system prompt contents
+  const appendedPrompts: string[] = [];
+  for (const filePath of appendPromptFiles) {
+    try {
+      const content = readFileSync(filePath, "utf-8");
+      appendedPrompts.push(content);
+    } catch {
+      // ignore missing files
+    }
+  }
+
   // Self-healing: ensure all required files/dirs exist
   const { created } = await ensureWiki(wikiRoot);
   if (created.length > 0) {
     console.error(`Wiki ready at: ${wikiRoot}`);
+  }
+
+  // Create agent and session
+  const agent = new WikiAgent();
+  const runtime = await agent.createSession(wikiRoot, {
+    appendSystemPrompt: appendedPrompts,
+  });
+
+  // Get positional task (for --mode json)
+  const positionalIndex = args.findIndex((a) =>
+    !a.startsWith("-") && a !== "llm-wiki-agent" && a !== wikiRoot
+  );
+  const positionalTask = positionalIndex !== -1 ? args.slice(positionalIndex).join(" ") : undefined;
+
+  // JSON mode: run with positional task
+  if (isJsonMode && positionalTask) {
+    await runPrintMode(runtime, { mode: "json", initialMessage: positionalTask });
+    await runtime.dispose();
+    await agent.dispose();
+    return;
   }
 
   // Read piped stdin for query
@@ -68,10 +118,6 @@ async function main(): Promise<void> {
     }
     pipedQuery = Buffer.concat(chunks).toString("utf-8").trim();
   }
-
-  // Create agent and session
-  const agent = new WikiAgent();
-  const runtime = await agent.createSession(wikiRoot);
 
   if (pipedQuery) {
     // PrintMode: piped query via AgentSession

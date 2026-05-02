@@ -3,7 +3,7 @@ import { describe, expect, test, beforeAll, afterAll } from "bun:test";
 import { mkdtempSync, writeFileSync, mkdirSync, rmSync, existsSync } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
-import { loadAgentsFromDir } from "../src/tools/subagent.js";
+import { loadAgentsFromDir, discoverAgents, agentNameToRole } from "../src/tools/subagent.js";
 
 let tmpDir: string;
 
@@ -118,5 +118,47 @@ Body B`,
     const agents = loadAgentsFromDir(dir);
     expect(agents).toHaveLength(2);
     expect(agents.map((a: any) => a.name).sort()).toEqual(["agent-a", "agent-b"]);
+  });
+});
+
+describe("agentNameToRole", () => {
+  test("strips wiki- prefix", () => {
+    expect(agentNameToRole("wiki-ingest")).toBe("ingest");
+    expect(agentNameToRole("wiki-query")).toBe("query");
+    expect(agentNameToRole("wiki-lint")).toBe("lint");
+  });
+
+  test("keeps name as-is when no wiki- prefix", () => {
+    expect(agentNameToRole("custom-agent")).toBe("custom-agent");
+    expect(agentNameToRole("ingest")).toBe("ingest");
+  });
+
+  test("handles empty string", () => {
+    expect(agentNameToRole("")).toBe("");
+  });
+});
+
+describe("discoverAgents", () => {
+  test("returns agents from repo agents/ directory", () => {
+    const result = discoverAgents(process.cwd());
+    expect(result.agents).toBeDefined();
+    expect(Array.isArray(result.agents)).toBe(true);
+    // The real agents/ dir should have at least one agent
+    expect(result.agents.length).toBeGreaterThan(0);
+    // Each agent should have required fields
+    for (const agent of result.agents) {
+      expect(agent.name).toBeDefined();
+      expect(agent.description).toBeDefined();
+    }
+  });
+
+  test("agents have proper structure", () => {
+    const result = discoverAgents(process.cwd());
+    for (const agent of result.agents) {
+      expect(typeof agent.name).toBe("string");
+      expect(typeof agent.description).toBe("string");
+      expect(typeof agent.systemPrompt).toBe("string");
+      expect(agent.filePath).toContain("agents/");
+    }
   });
 });

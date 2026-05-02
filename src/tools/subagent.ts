@@ -76,7 +76,8 @@ export function discoverAgents(_cwd: string): { agents: AgentConfig[]; projectAg
 
 // === CLI invocation ===
 
-function agentNameToRole(name: string): string {
+/** @internal exported for testing */
+export function agentNameToRole(name: string): string {
   // "wiki-ingest" → "ingest", keep as-is if no "wiki-" prefix
   return name.startsWith("wiki-") ? name.slice(5) : name;
 }

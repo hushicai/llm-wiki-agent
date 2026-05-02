@@ -81,6 +81,11 @@ export class WikiAgent {
   async createSession(wikiRoot: string, options?: CreateSessionOptions) {
     const { role, appendSystemPrompt: extraPrompts } = options ?? {};
 
+    // 仓库根目录（用于 extensions/ 和 skills/）
+    const repoRoot = join(__dirname, "../.."); // src/core/ -> 项目根
+    const extensionsDir = join(repoRoot, "extensions");
+    const skillsDir = join(repoRoot, "skills");
+
     const wikiSlug = slugify(wikiRoot.split("/").pop() || "wiki");
     const sessionDir = getSessionDir(wikiSlug);
     const sessionManager = SessionManager.create(wikiRoot, sessionDir);
@@ -89,12 +94,23 @@ export class WikiAgent {
       cwd: wikiRoot,
       agentDir: this.agentDir,
       resourceLoaderOptions: {
-        // Skills 加载在 Task 5 中统一处理
+        // 关闭 SDK 自动发现，全部自己管理
+        noExtensions: true,
         noSkills: true,
+
+        // 显式传入仓库 extensions/ + skills/
+        ...(existsSync(extensionsDir) && !role && {
+          additionalExtensionPaths: [extensionsDir],
+        }),
+        ...(existsSync(skillsDir) && !role && {
+          additionalSkillPaths: [skillsDir],
+        }),
+
         appendSystemPrompt: [
           ...this.systemPromptLines,
           ...(extraPrompts ?? []),
         ],
+
         ...(role && {
           // Subagent 模式：禁用所有 extension，传入自定义 system prompt
           noExtensions: true,

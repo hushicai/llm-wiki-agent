@@ -27,7 +27,8 @@ export interface AgentConfig {
 
 // === Agent discovery (从仓库 agents/ 读取) ===
 
-function loadAgentsFromDir(dir: string): AgentConfig[] {
+/** @internal exported for testing */
+export function loadAgentsFromDir(dir: string): AgentConfig[] {
   const agents: AgentConfig[] = [];
   if (!fs.existsSync(dir)) return agents;
   let entries: fs.Dirent[];

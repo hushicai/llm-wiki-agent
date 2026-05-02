@@ -45,18 +45,6 @@ function buildStructureDiagram(dirs: string[]): string {
 ${dirList}`;
 }
 
-async function generateAgentsMd(wikiRoot: string, wikiName: string): Promise<string> {
-  const dirs = await getContentDirs(wikiRoot);
-  const structure = buildStructureDiagram(dirs);
-
-  const templatePath = new URL("../templates/wiki-schema-template.md", import.meta.url).pathname;
-  const template = await readFile(templatePath, "utf-8");
-
-  return template
-    .replace(/\{\{WIKI_NAME\}\}/g, wikiName)
-    .replace(/\{\{STRUCTURE\}\}/g, structure);
-}
-
 /**
  * Required files and directories for a valid wiki.
  * Used by ensureWiki() for self-healing.
@@ -73,13 +61,6 @@ const REQUIRED_FILES: Array<{ name: string; generate: (wikiRoot: string, name: s
         created: new Date().toISOString().split("T")[0],
       };
       await writeFile(join(wikiRoot, name), stringify(config));
-    },
-  },
-  {
-    name: "AGENTS.md",
-    generate: async (wikiRoot, _name) => {
-      const content = await generateAgentsMd(wikiRoot, "My Wiki");
-      await writeFile(join(wikiRoot, "AGENTS.md"), content);
     },
   },
   {

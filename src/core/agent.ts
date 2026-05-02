@@ -17,6 +17,43 @@ export interface ModelInfo {
   contextWindow?: number;
 }
 
+export interface CreateSessionOptions {
+  /** Subagent role (ingest/query/lint), undefined for main agent */
+  role?: string;
+  /** Additional system prompt content to append */
+  appendSystemPrompt?: string[];
+}
+
+// === Subagent prompt loading ===
+
+function parseFrontmatter(content: string): { frontmatter: Record<string, string>; body: string } {
+  const match = content.match(/^---\n([\s\S]*?)\n---\n([\s\S]*)$/);
+  if (!match) return { frontmatter: {}, body: content };
+  const frontmatter: Record<string, string> = {};
+  for (const line of match[1].split("\n")) {
+    const [key, ...rest] = line.split(":");
+    if (key && rest.length > 0) {
+      frontmatter[key.trim()] = rest.join(":").trim();
+    }
+  }
+  return { frontmatter, body: match[2] };
+}
+
+function loadSubagentPrompt(role: string): string[] {
+  const repoRoot = join(__dirname, "../.."); // src/core/ -> 项目根
+  const agentsDir = join(repoRoot, "agents");
+  const filePath = join(agentsDir, `wiki-${role}.md`);
+  try {
+    const content = readFileSync(filePath, "utf-8");
+    const { body } = parseFrontmatter(content);
+    return body.split("\n");
+  } catch {
+    return [];
+  }
+}
+
+// === WikiAgent ===
+
 export class WikiAgent {
   private agentDir: string;
   private systemPromptLines: string[];
@@ -41,7 +78,9 @@ export class WikiAgent {
     }
   }
 
-  async createSession(wikiRoot: string) {
+  async createSession(wikiRoot: string, options?: CreateSessionOptions) {
+    const { role, appendSystemPrompt: extraPrompts } = options ?? {};
+
     const wikiSlug = slugify(wikiRoot.split("/").pop() || "wiki");
     const sessionDir = getSessionDir(wikiSlug);
     const sessionManager = SessionManager.create(wikiRoot, sessionDir);
@@ -50,10 +89,16 @@ export class WikiAgent {
       cwd: wikiRoot,
       agentDir: this.agentDir,
       resourceLoaderOptions: {
+        // Skills 加载在 Task 5 中统一处理
         noSkills: true,
-        appendSystemPrompt: this.systemPromptLines,
-        ...(existsSync(join(this.agentDir, "skills")) && {
-          additionalSkillPaths: [join(this.agentDir, "skills")],
+        appendSystemPrompt: [
+          ...this.systemPromptLines,
+          ...(extraPrompts ?? []),
+        ],
+        ...(role && {
+          // Subagent 模式：禁用所有 extension，传入自定义 system prompt
+          noExtensions: true,
+          systemPrompt: loadSubagentPrompt(role),
         }),
       },
     });

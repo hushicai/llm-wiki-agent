@@ -13,6 +13,7 @@ import {
   logSubagentEnd,
   logSubagentError,
 } from "../utils/log.js";
+import { getRepoRoot } from "../utils/resolve.js";
 
 export type AgentScope = "user" | "project" | "both";
 
@@ -76,15 +77,6 @@ function loadAgentsFromDir(dir: string, source: "user" | "project"): AgentConfig
     });
   }
   return agents;
-}
-
-function getRepoRoot(): string {
-  if (typeof __dirname !== "undefined") {
-    return path.join(__dirname, "..", "..");
-  }
-  // Bun runtime: use import.meta.url
-  const currentFile = import.meta.url;
-  return path.join(path.dirname(currentFile.replace("file://", "")), "..", "..");
 }
 
 // === Agent discovery ===

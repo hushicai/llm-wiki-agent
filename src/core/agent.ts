@@ -7,9 +7,9 @@ import {
   SessionManager,
 } from "@mariozechner/pi-coding-agent";
 import { readFileSync } from "fs";
-import { dirname, join } from "path";
-import { fileURLToPath } from "url";
+import { join } from "path";
 import { getAgentDir, getSessionDir, slugify } from "./config.js";
+import { getRepoRoot } from "../utils/resolve.js";
 import { createSubagentTool } from "../tools/subagent.js";
 
 export interface ModelInfo {
@@ -40,11 +40,6 @@ function parseFrontmatter(content: string): { frontmatter: Record<string, string
     }
   }
   return { frontmatter, body: match[2] };
-}
-
-function getRepoRoot(): string {
-  const currentFile = fileURLToPath(import.meta.url);
-  return join(dirname(currentFile), "../.."); // src/core/ -> 项目根
 }
 
 function loadMainAgentPrompt(): string | undefined {
@@ -88,9 +83,6 @@ export class WikiAgent {
 
   async createSession(wikiRoot: string, options?: CreateSessionOptions) {
     const { role, appendSystemPrompt: extraPrompts } = options ?? {};
-
-    const currentFile = fileURLToPath(import.meta.url);
-    const repoRoot = join(currentFile, "../.."); // src/core/ -> 项目根
 
     const wikiSlug = slugify(wikiRoot.split("/").pop() || "wiki");
     const sessionDir = getSessionDir(wikiSlug);

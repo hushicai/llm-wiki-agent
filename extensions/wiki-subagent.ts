@@ -75,9 +75,20 @@ function loadAgentsFromDir(dir: string, source: "user" | "project"): AgentConfig
   return agents;
 }
 
+function getRepoRoot(): string {
+  if (typeof __dirname !== "undefined") {
+    return path.join(__dirname, "../..");
+  }
+  // Bun runtime: use import.meta.url
+  const currentFile = import.meta.url;
+  return path.join(path.dirname(currentFile.replace("file://", "")), "../..");
+}
+
+// === Agent discovery (从仓库 agents/ 读取) ===
+
 export function discoverAgents(cwd: string, _scope: AgentScope): { agents: AgentConfig[]; projectAgentsDir: string | null } {
   // llm-wiki-agent: 从仓库 agents/ 目录发现（不在 user home）
-  const repoRoot = path.join(__dirname, "../.."); // extensions/ -> 项目根
+  const repoRoot = getRepoRoot();
   const agentsDir = path.join(repoRoot, "agents");
   const userAgents = loadAgentsFromDir(agentsDir, "user");
   return { agents: userAgents, projectAgentsDir: null };
@@ -97,7 +108,7 @@ function getCliInvocation(wikiRoot: string, args: string[]): { command: string; 
   }
 
   // 否则尝试 bun run src/cli.ts
-  const pkgRoot = path.join(__dirname, "../.."); // extensions/ -> 项目根
+  const pkgRoot = getRepoRoot();
   const cliPath = path.join(pkgRoot, "src/cli.ts");
   if (fs.existsSync(cliPath)) {
     return { command: "bun", args: [cliPath, ...args] };

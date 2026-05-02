@@ -10,12 +10,25 @@
 
 ## Task 1: 创建 Subagent Agent 定义文件
 
-**Objective:** 创建 3 个 subagent 定义文件在 `~/.llm-wiki-agent/agents/`
+**Objective:** 创建 3 个 subagent 定义文件在仓库 `agents/` 目录
 
 **Files:**
-- Create: `~/.llm-wiki-agent/agents/wiki-ingest.md`
-- Create: `~/.llm-wiki-agent/agents/wiki-query.md`
-- Create: `~/.llm-wiki-agent/agents/wiki-lint.md`
+- Create: `agents/wiki-ingest.md`
+- Create: `agents/wiki-query.md`
+- Create: `agents/wiki-lint.md`
+
+**Directory Structure:**
+
+```
+llm-wiki-agent/
+├── agents/                 # 仓库顶层，git 管理
+│   ├── wiki-ingest.md
+│   ├── wiki-query.md
+│   └── wiki-lint.md
+├── extensions/
+│   └── wiki-subagent.ts    # discoverAgents 从 ./agents/ 读取
+└── src/
+```
 
 **Step 1: 创建 wiki-ingest.md**
 
@@ -109,12 +122,12 @@ mkdir -p ~/.llm-wiki-agent/agents
 # 将上述3个文件写入该目录
 ```
 
-**Step 5: Commit**
+**Step 4: Commit**
 
 ```bash
-mkdir -p ~/.llm-wiki-agent/agents
+mkdir -p agents
 # 创建3个md文件
-git add docs/superpowers/plans/
+git add agents/
 git commit -m "feat: add subagent agent definition files"
 ```
 
@@ -286,7 +299,7 @@ async createSession(wikiRoot: string, options?: CreateSessionOptions) {
 
 **Step 3: 根据 role 设置 resourceLoaderOptions**
 
-在 `createSession` 内部，找到 `resourceLoaderOptions` 构造处，修改为：
+在 `createSession` 内部，**移除**原来的 `additionalSkillPaths` 逻辑（从 `~/.llm-wiki-agent/skills/` 加载），修改为：
 
 ```typescript
 resourceLoaderOptions: {
@@ -300,9 +313,7 @@ resourceLoaderOptions: {
     noExtensions: true,
     systemPrompt: loadSubagentPrompt(role),
   }),
-  ...(existsSync(join(this.agentDir, "skills")) && {
-    additionalSkillPaths: [join(this.agentDir, "skills")],
-  }),
+  // Skills 加载在 Task 5 中统一处理
 },
 ```
 
@@ -311,11 +322,13 @@ resourceLoaderOptions: {
 在 `WikiAgent` 类外部添加：
 
 ```typescript
+import { existsSync } from "fs";
 import { join } from "path";
-import { homedir } from "os";
+import { readFileSync } from "fs";
 
 function loadSubagentPrompt(role: string): string[] {
-  const agentsDir = join(homedir(), ".llm-wiki-agent", "agents");
+  const repoRoot = join(__dirname, "../..");  // src/core/ -> 项目根
+  const agentsDir = join(repoRoot, "agents");
   const filePath = join(agentsDir, `wiki-${role}.md`);
   try {
     const content = readFileSync(filePath, "utf-8");
@@ -342,11 +355,13 @@ function parseFrontmatter(content: string): { frontmatter: Record<string, string
 }
 ```
 
-注意：`parseFrontmatter` 可以从 pi SDK 导入，检查 `src/core/resource-loader.ts` 中是否有此函数。
+注意：`parseFrontmatter` 可以从 pi SDK 导入，也可以自己实现。推荐从 SDK 导入：
 
 ```typescript
 // 如果 pi SDK 导出了 parseFrontmatter，改为：
 import { parseFrontmatter } from "@mariozechner/pi-coding-agent";
+
+// 否则使用自己实现的版本（见 wiki-subagent.ts 中的实现）
 ```
 
 **Step 5: 验证编译**
@@ -366,37 +381,41 @@ git commit -m "feat: WikiAgent.createSession supports role and appendSystemPromp
 
 ---
 
-## Task 4: 实现 wiki-subagent.ts（基于 pi SDK 改编）
+## Task 4: 创建仓库 extensions/ 目录 + wiki-subagent.ts
 
-**Objective:** 创建 llm-wiki-agent 专用的 subagent extension，注册 `subagent` 工具，spawn `llm-wiki-agent` 子进程
+**Objective:** Extension 代码放在仓库顶层 `extensions/`，不在 `src/core/extensions/`
 
 **Files:**
-- Create: `src/core/extensions/wiki-subagent.ts`
-- Modify: `src/core/agent.ts`（注册 extension）
+- Create: `extensions/wiki-subagent.ts`
 
-**Step 1: 理解关键适配点**
+**Directory Structure:**
 
-pi SDK subagent extension 的核心逻辑需要适配：
+```
+llm-wiki-agent/
+├── agents/                 # subagent 定义文件
+│   ├── wiki-ingest.md
+│   ├── wiki-query.md
+│   └── wiki-lint.md
+├── extensions/             # extension 代码
+│   └── wiki-subagent.ts    # discoverAgents 从 ../agents/ 读取
+├── skills/                 # 仓库技能
+└── src/core/agent.ts       # 显式加载仓库 extensions/ + skills/
+```
 
-| pi SDK | llm-wiki-agent |
-|--------|----------------|
-| `discoverAgents()` 从 `~/.pi/agent/agents/` | 改为 `~/.llm-wiki-agent/agents/` |
-| 子进程命令 `pi --mode json` | 改为 `llm-wiki-agent --wiki <path> --mode json` |
-| 使用 pi 内置工具 | 同上（llm-wiki-agent 内置相同工具） |
-| `getPiInvocation()` | 改为 `getWikiAgentInvocation()`（找到 `llm-wiki-agent` 可执行文件） |
+**Step 1: 创建 extensions 目录**
 
-**Step 2: 创建 wiki-subagent.ts**
+```bash
+mkdir -p extensions
+```
 
-```typescript
-// src/core/extensions/wiki-subagent.ts
-// 基于 pi SDK examples/extensions/subagent/index.ts 改编
-// 适配 llm-wiki-agent：发现路径、子进程命令、Invocation 获取方式
+**Step 2: wiki-subagent.ts 放在仓库 extensions/**
+
+代码同上（略），**文件路径改为** `extensions/wiki-subagent.ts`。
 
 import { spawn } from "node:child_process";
 import * as fs from "node:fs";
 import * as os from "os";
 import * as path from "node:path";
-import { homedir } from "os";
 import type { AgentToolResult } from "@mariozechner/pi-agent-core";
 import type { Message } from "@mariozechner/pi-ai";
 import { StringEnum } from "@mariozechner/pi-ai";
@@ -415,7 +434,7 @@ export interface AgentConfig {
   filePath: string;
 }
 
-// === 发现逻辑（适配 ~/.llm-wiki-agent/agents/） ===
+// === 发现逻辑（从仓库 agents/ 读取） ===
 
 function parseFrontmatter(content: string): { frontmatter: Record<string, string>; body: string } {
   const match = content.match(/^---\n([\s\S]*?)\n---\n([\s\S]*)$/);
@@ -468,9 +487,10 @@ function loadAgentsFromDir(dir: string, source: "user" | "project"): AgentConfig
 }
 
 export function discoverAgents(cwd: string, _scope: AgentScope): { agents: AgentConfig[]; projectAgentsDir: string | null } {
-  // llm-wiki-agent: 只从 ~/.llm-wiki-agent/agents/ 发现
-  const userDir = path.join(homedir(), ".llm-wiki-agent", "agents");
-  const userAgents = loadAgentsFromDir(userDir, "user");
+  // llm-wiki-agent: 从仓库 agents/ 目录发现（不在 user home）
+  const repoRoot = path.join(__dirname, "../..");  // extensions/ -> 项目根
+  const agentsDir = path.join(repoRoot, "agents");
+  const userAgents = loadAgentsFromDir(agentsDir, "user");
   return { agents: userAgents, projectAgentsDir: null };
 }
 
@@ -685,42 +705,86 @@ export default function wikiSubagentExtension(pi: ExtensionAPI) {
 }
 ```
 
-**Step 3: 在 WikiAgent 中注册 wiki-subagent extension**
-
-修改 `src/core/agent.ts`，在 `createSession` 的 `resourceLoaderOptions` 中添加 `extensionFactories`：
-
-```typescript
-import wikiSubagentExtension from "./extensions/wiki-subagent.js";
-
-// 在 createSession 中：
-resourceLoaderOptions: {
-  noSkills: true,
-  appendSystemPrompt: [
-    ...this.systemPromptLines,
-    ...(extraPrompts ?? []),
-  ],
-  ...(role && {
-    noExtensions: true,
-    systemPrompt: loadSubagentPrompt(role),
-  }),
-  ...(existsSync(join(this.agentDir, "skills")) && {
-    additionalSkillPaths: [join(this.agentDir, "skills")],
-  }),
-  // 主 agent 模式：注册 wiki-subagent extension
-  ...(!role && {
-    extensionFactories: [wikiSubagentExtension],
-  }),
-},
-```
-
-**Step 4: 创建 extensions 目录**
+**Step 3: Commit**
 
 ```bash
-mkdir -p src/core/extensions
-# 确保 wiki-subagent.ts 已创建
+mkdir -p extensions
+# 创建 extensions/wiki-subagent.ts
+git add extensions/
+git commit -m "feat: add wiki-subagent extension"
 ```
 
-**Step 5: 验证编译**
+---
+
+## Task 5: WikiAgent 显式加载仓库 extensions/skills
+
+**Objective:** 不依赖 SDK 自动发现，通过 `additionalExtensionPaths` / `additionalSkillPaths` 显式传入仓库路径
+
+**Files:**
+- Modify: `src/core/agent.ts`
+
+**设计原则：**
+- `noExtensions: true` + `noSkills: true` 关闭 SDK 自动发现
+- 仓库 `extensions/` 和 `skills/` 全部自己管理
+- 通过 `additionalExtensionPaths` / `additionalSkillPaths` 传入
+
+**Step 1: 修改 src/core/agent.ts**
+
+```typescript
+import { existsSync } from "fs";
+import { join } from "path";
+
+export interface CreateSessionOptions {
+  /** Subagent role (ingest/query/lint), undefined for main agent */
+  role?: string;
+  /** Additional system prompt content to append */
+  appendSystemPrompt?: string[];
+}
+
+export class WikiAgent {
+  // ...
+
+  async createSession(wikiRoot: string, options?: CreateSessionOptions) {
+    const { role, appendSystemPrompt: extraPrompts } = options ?? {};
+
+    // 仓库根目录（用于 extensions/ 和 skills/）
+    const repoRoot = join(__dirname, "../.."); // src/core/ -> 项目根
+
+    const extensionsDir = join(repoRoot, "extensions");
+    const skillsDir = join(repoRoot, "skills");
+
+    const resourceLoaderOptions: any = {
+      // 关闭 SDK 自动发现，全部自己管理
+      noExtensions: true,
+      noSkills: true,
+
+      // 显式传入仓库 extensions/ + skills/
+      ...(existsSync(extensionsDir) && {
+        additionalExtensionPaths: [extensionsDir],
+      }),
+      ...(existsSync(skillsDir) && {
+        additionalSkillPaths: [skillsDir],
+      }),
+
+      // System prompt
+      appendSystemPrompt: [
+        ...this.systemPromptLines,
+        ...(extraPrompts ?? []),
+      ],
+
+      // Subagent 模式
+      ...(role && {
+        noExtensions: true,
+        systemPrompt: loadSubagentPrompt(role),
+      }),
+    };
+
+    // ...
+  }
+}
+```
+
+**Step 2: 验证编译**
 
 ```bash
 cd /Users/hushicai/data/ai-project/llm-wiki-agent
@@ -728,16 +792,16 @@ bun build
 # 预期：无编译错误
 ```
 
-**Step 6: Commit**
+**Step 3: Commit**
 
 ```bash
-git add src/core/extensions/wiki-subagent.ts src/core/agent.ts
-git commit -m "feat: implement wiki-subagent extension with subagent tool"
+git add src/core/agent.ts
+git commit -m "feat: WikiAgent loads extensions/skills from repo paths"
 ```
 
 ---
 
-## Task 5: 测试 Subagent 模式
+## Task 6: 测试 Subagent 模式
 
 **Objective:** 验证 `llm-wiki-agent --role query --append-system-prompt <file>` 能正常工作
 
@@ -757,7 +821,7 @@ echo "title: test\n---" > $TEST_WIKI/wiki/test.md
 echo -e "---\nname: test\n---\ntest content" > $TEST_WIKI/wiki/test.md
 
 # 测试 subagent 模式（JSON 模式输出）
-echo "What is test?" | bun run src/cli.ts --wiki $TEST_WIKI --mode json --append-system-prompt ~/.llm-wiki-agent/agents/wiki-query.md
+echo "What is test?" | bun run src/cli.ts --wiki $TEST_WIKI --mode json --append-system-prompt ./agents/wiki-query.md
 # 预期：JSON 行输出，最终有 message_end 事件
 ```
 
@@ -765,7 +829,7 @@ echo "What is test?" | bun run src/cli.ts --wiki $TEST_WIKI --mode json --append
 
 ```bash
 # 检查是否输出了 JSON 行（每个事件一行）
-echo "What is test?" | bun run src/cli.ts --wiki $TEST_WIKI --mode json --append-system-prompt ~/.llm-wiki-agent/agents/wiki-query.md 2>&1 | head -5
+echo "What is test?" | bun run src/cli.ts --wiki $TEST_WIKI --mode json --append-system-prompt ./agents/wiki-query.md 2>&1 | head -5
 # 预期：{"type":"start",...} 或类似 JSON 事件
 ```
 
@@ -778,7 +842,7 @@ git commit -m "test: add subagent integration tests"
 
 ---
 
-## Task 6: 端到端测试 — 主 Agent 调用 Subagent
+## Task 7: 端到端测试 — 主 Agent 调用 Subagent
 
 **Objective:** 验证主 agent 能通过 `subagent` 工具调用 subagent
 
@@ -791,7 +855,7 @@ TEST_WIKI=/tmp/test-wiki-subagent
 
 # 测试 wiki-subagent.ts 的 discoverAgents
 node --input-type=module << 'EOF'
-import { discoverAgents } from './dist/core/extensions/wiki-subagent.js';
+import { discoverAgents } from './extensions/wiki-subagent.js';
 const result = discoverAgents('/tmp/test-wiki-subagent', 'user');
 console.log('Found agents:', result.agents.map(a => a.name));
 EOF
@@ -810,17 +874,23 @@ EOF
 
 ## 实施顺序
 
-| # | Task | 优先级 | 依赖 |
+|| # | Task | 优先级 | 依赖 |
 |---|------|--------|------|
-| 1 | 创建 subagent 定义文件 | P0 | 无 |
-| 2 | CLI 改造（--mode json） | P0 | 无 |
-| 3 | WikiAgent.createSession 支持 role | P0 | Task 2 |
-| 4 | wiki-subagent.ts extension | P0 | Task 1, 2, 3 |
-| 5 | 测试 subagent 模式 | P1 | Task 1, 2, 3 |
-| 6 | 端到端分发测试 | P2 | Task 4 |
+| 1 | 创建 subagent 定义文件（`agents/wiki-*.md`） | P0 | 无 |
+| 2 | CLI 改造（`--mode json` + `--append-system-prompt`） | P0 | 无 |
+| 3 | WikiAgent.createSession 支持 role + appendSystemPrompt | P0 | Task 2 |
+| 3.1 | 清理 agent.ts：移除 `~/.llm-wiki-agent/skills/` 加载逻辑 | P0 | Task 3 |
+| 4 | 创建仓库 `extensions/wiki-subagent.ts` | P0 | Task 1 |
+| 4.1 | 清理 wiki-subagent.ts：移除冗余 import | P0 | Task 4 |
+| 5 | WikiAgent 显式加载仓库 `extensions/` + `skills/` | P0 | Task 4, 4.1, 3.1 |
+| 6 | 测试 subagent 模式 | P1 | Task 4, 4.1, 5 |
+| 7 | 端到端分发测试 | P2 | Task 5 |
+
+**注意：** Task 3.1 和 3 在 `src/core/agent.ts` 中合并实现。Task 4.1 在 Task 4 中一并实现。
 
 ## 关键风险点
 
-1. **`getCliInvocation()` 路径解析**：llm-wiki-agent 的可执行文件路径在不同环境（源码/bun run/dist）下不同，需要确保找到正确的入口
+1. **`__dirname` 回溯路径**：dist/ 下运行 vs 源码运行路径不同，需验证 `join(__dirname, "../..")` 能正确找到仓库根
 2. **`parseFrontmatter` 复用**：从 pi SDK 导入 vs 自己实现，确保行为一致
-3. **`runPrintMode` 的 `mode: "json"` 输出格式**：需要确认 pi SDK 的 JSON 事件类型与 `runSingleAgent` 中的 `processLine` 解析匹配
+3. **`runPrintMode` 的 `mode: "json"` 输出格式**：需要确认 pi SDK 的 JSON 事件类型与 `processLine` 解析匹配
+4. **SDK `additionalExtensionPaths` 加载机制**：确保 SDK 能正确加载仓库 `extensions/` 下的 .js 文件

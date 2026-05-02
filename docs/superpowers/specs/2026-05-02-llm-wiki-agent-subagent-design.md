@@ -16,7 +16,7 @@
 ┌─────────────────────────────────────────────────────────────┐
 │  主 Agent Session（WikiAgent 主 session）                     │
 │                                                             │
-│  工具集：仅 subagent 分发工具 wiki_dispatch                  │
+│  工具集：仅 subagent 工具（pi 内置 subagent extension）     │
 │  System Prompt：Wiki 管理员，负责任务理解与分发                │
 │  上下文窗口：对话管理 + 分发决策（不参与具体 wiki 操作）       │
 └────────────────────┬────────────────────────────────────────┘
@@ -32,18 +32,17 @@
    pi built-in   pi built-in  pi built-in
    (read/write/  (read/grep/  (read/write/
     bash/grep)    find/ls)     bash/grep)
-  SysPrompt:   SysPrompt:   SysPrompt:
-  ingest.md    query.md     lint.md
+   SysPrompt:   SysPrompt:   SysPrompt:
+   wiki-ingest  wiki-query   wiki-lint
+     agents       agents      agents
 ```
-
-## 核心约束
 
 | 约束 | 说明 |
 |------|------|
 | **完全隔离的上下文窗口** | 每个 subagent 是独立子进程，拥有独立内存上下文 |
-| **可指定 system prompt** | CLI 支持 `--system-prompt <file>` 传入自定义 system prompt |
-| **JSON 行流协议** | 子进程通过 stdout 输出 JSON 行流，主 agent 实时解析 |
-| **内置工具读写 wikiroot** | Subagent 仅使用 wiki 内置工具，不使用 pi 内置的 read/write/grep 等 |
+| **Agent 定义在 ~/.llm-wiki-agent/agents/*.md** | Subagent 从此目录发现（不同于 pi 默认的 ~/.pi/agent/agents/） |
+| **子进程命令** | 启动 `llm-wiki-agent --role <name> --system-prompt-file <file>` |
+| **内置工具读写 wikiroot** | Subagent 使用 pi 内置工具 + 自定义 system prompt |
 
 ## Subagent 进程通信协议
 
@@ -90,148 +89,98 @@ llm-wiki-agent --wiki <path> --role <ingest|query|lint> --query <task>
 
 ### 1. CLI 改造（`src/cli.ts`）
 
-新增参数：
+**CLI 新增参数**（`src/cli.ts`）：
 
 ```bash
-llm-wiki-agent --wiki <path> --role <role> --query <task> [--system-prompt <file>] [--timeout <seconds>]
+llm-wiki-agent --wiki <path> --mode <interactive|json> --role <name> --append-system-prompt <file>
 ```
 
 | 参数 | 说明 |
 |------|------|
-| `--role` | subagent 角色：`ingest`、`query`、`lint` |
-| `--query` | 任务描述 |
-| `--system-prompt` | 可选，自定义 system prompt 文件路径 |
-| `--timeout` | 超时秒数，默认 300 |
+| `--mode json` | 使用 `runPrintMode({ mode: "json" })` 输出 JSON 事件流（用于 subagent 子进程） |
+| `--role <name>` | Subagent 角色名（如 `wiki-ingest`） |
+| `--append-system-prompt <file>` | 从文件加载 system prompt |
 
-改造逻辑：
+**实现方式**：复用 pi SDK 的 `runPrintMode(runtime, { mode: "json", initialMessage: task })`。只需：
+1. 解析 `--mode json` 参数
+2. 有 `--mode json` 时调用 `runPrintMode` 而非 InteractiveMode
+3. Task 从 `positionalArgs` 或 stdin 获取
 
-```typescript
-// 有 --role 时进入 subagent 模式（无 TUI，直接输出 JSON 行流）
-if (role) {
-  await runSubagentMode({ wikiRoot, role, query, systemPromptFile, timeout });
-  return;
-}
+Subagent 进程通过 `--mode json` 输出 JSON 行流到 stdout，主 agent 的 wiki-subagent extension 实时解析。
+
+### 3. Subagent Extension（使用 pi SDK 内置）
+
+**关键决策**：使用 pi SDK 的 subagent extension，不自己实现分发工具。
+
+- 主 agent 注册 pi 的 `subagent` 扩展（内置一个 `subagent` 工具）
+- Subagent 从 `~/.llm-wiki-agent/agents/` 目录发现
+- Subagent 启动时带上自定义 system prompt 和工具集
+
+#### Subagent 定义文件（`~/.llm-wiki-agent/agents/*.md`）
+
+每个 subagent 是一个 `.md` 文件：
+
+```markdown
+---
+name: wiki-ingest
+description: 将原始资料摄入 wiki。触发词：ingest、录入、add to wiki。
+tools: read,bash,grep,find
+---
+# Wiki Ingest Agent
+
+你是一个专门将原始资料转化为结构化 wiki 知识的 Agent...
+
+（body 作为 system prompt）
 ```
 
-### 2. Subagent 运行模式（`src/subagent.ts`）
+| 文件 | Role | Tools | 说明 |
+|------|------|-------|------|
+| `wiki-ingest.md` | ingest | read,bash | 将 raw 文件摄入 wiki |
+| `wiki-query.md` | query | read,grep,find | 检索 wiki 回答问题 |
+| `wiki-lint.md` | lint | read,write,bash,grep | 检查并修复 wiki 问题 |
+
+#### WikiAgent 改造
 
 ```typescript
-export async function runSubagentMode(options: SubagentOptions) {
-  const { wikiRoot, role, query, systemPromptFile, timeout } = options;
-
-  // 1. 加载 role 对应的 system prompt
-  const systemPrompt = systemPromptFile
-    ? await readFile(systemPromptFile, "utf-8")
-    : DEFAULT_PROMPTS[role];  // 内置默认 prompt
-
-  // 2. 创建 session，传入自定义 system prompt
-  const runtime = await createWikiSession({ wikiRoot, systemPrompt, role });
-
-  // 3. 订阅事件，输出 JSON 行流到 stdout
-  const unsubscribe = runtime.session.subscribe(event => {
-    process.stdout.write(JSON.stringify(toJsonEvent(event)) + "\n");
-  });
-
-  // 4. 发送 query
-  await runtime.session.prompt(query);
-
-  // 5. 等待完成
-  await runtime.dispose();
-}
-```
-
-关键点：`createWikiSession` 需要支持传入自定义 system prompt 和 role。
-
-### 3. WikiAgent 改造（`src/core/agent.ts`）
-
-```typescript
-// WikiAgent.createSession(role) 模式：
-// - 主 agent（role=undefined）：注册 wiki_dispatch 扩展
-// - subagent（role=ingest|query|lint）：使用 pi 内置工具 + 自定义 system prompt
-
+// 主 agent 模式：注册 pi 的 subagent extension
 if (role === undefined) {
-  // 主 agent 模式：注册分发工具
-  resourceLoaderOptions.extensionFactories = [dispatcherExtension(wikiRoot)];
+  // 不注册任何自定义工具
+  // pi 的 subagent extension 会从 ~/.llm-wiki-agent/agents/ 发现 subagent
+  resourceLoaderOptions.extensionFactories = [subagentExtension];
+  // 注意：pi subagent extension 不需要额外配置，discoverAgents() 自动从标准路径发现
 } else {
-  // Subagent 模式：注册自定义 system prompt
+  // Subagent 自身模式（llm-wiki-agent --role ingest 等）
   resourceLoaderOptions.systemPrompt = loadSubagentPrompt(role);
-  // 不注册任何扩展，subagent 使用 pi 内置工具
+  // 不注册 subagent extension
 }
 ```
 
-**注意**：`createWikiSession` 当前用 `noSkills: true` 阻止外部 skills。Subagent 需要保持这个设置，保证只使用 pi 内置工具，不受 skills 干扰。
+**注意**：`subagentExtension` 来自 pi SDK 内置（`examples/extensions/subagent/index.ts`）。需要将其源码或打包引入到 llm-wiki-agent 中，或者直接使用文件路径注册。
 
-### 6. Subagent 分发工具（`src/core/extensions/dispatcher.ts`）
+### 7. Subagent Agent 定义文件
 
-通过 `ExtensionFactory` 注册到主 agent：
+Subagent 的 system prompt 写在 agent 定义文件中（`.md` 格式），放在 `~/.llm-wiki-agent/agents/`。
 
-```typescript
-export const dispatcherExtension: ExtensionFactory = (pi) => {
-  pi.registerTool({
-    name: "wiki_dispatch",
-    label: "Wiki Dispatcher",
-    description: [
-      "将任务分发给专门的 subagent 处理。",
-      "ingest：摄入源文件到 wiki",
-      "query：在 wiki 中检索并回答问题",
-      "lint：检查并修复 wiki 问题",
-    ].join(" "),
-    parameters: Type.Object({
-      role: Type.Union([
-        Type.Literal("ingest"),
-        Type.Literal("query"),
-        Type.Literal("lint"),
-      ], { description: "Subagent 角色" }),
-      task: Type.String({ description: "要执行的任务描述" }),
-    }),
-    async execute(toolCallId, params, signal, onUpdate) {
-      const result = await runWikiSubagent({
-        role: params.role,
-        task: params.task,
-        wikiRoot: ctx.wikiRoot,
-        signal,
-        onUpdate: (event) => {
-          // 实时推送 delta 事件
-          onUpdate({ content: [{ type: "text", text: event.text }] });
-        },
-      });
+**注意**：pi subagent extension 默认从 `~/.pi/agent/agents/` 发现 agent。需要修改 `discoverAgents()` 的查找路径为 `~/.llm-wiki-agent/agents/`。
 
-      return {
-        content: [{ type: "text", text: result.summary }],
-        details: { role: params.role, ...result },
-      };
-    },
-  });
-};
-```
+#### `~/.llm-wiki-agent/agents/wiki-ingest.md`
 
-注册到主 agent 的方式：
-
-```typescript
-// 在 WikiAgent.createSession() 的 resourceLoaderOptions 中传入
-resourceLoaderOptions: {
-  extensionFactories: [dispatcherExtension],  // 新增
-  appendSystemPrompt: mainSystemPromptLines,
-}
-```
-
-### 7. Subagent System Prompts
-
-#### `src/templates/subagent-ingest-prompt.md`
-
-```
+```markdown
+---
+name: wiki-ingest
+description: 将原始资料摄入 wiki。触发词：ingest、录入、add to wiki。
+tools: read,bash,grep,find
+---
 你是一个 Wiki 知识摄入 Agent。
 
 ## 核心职责
 将原始资料（raw/ 下的文件）转化为结构化 wiki 知识。
-## 工具使用规则
 
-- 使用 pi 内置工具（read/write/grep/find/ls/bash）操作文件
-- 所有操作限制在 wiki 根目录下
-- 工作目录：`{wikiRoot}`
+## 工作目录
+{wikiRoot}
 
 ## 工作流程
-1. 读取源文件，理解内容
+1. 读取 raw/ 下的源文件，理解内容
 2. 识别关键实体、概念、关系
 3. 按 frontmatter 格式写入 wiki/ 条目
 4. 更新 index.md（新增条目）
@@ -242,18 +191,21 @@ resourceLoaderOptions: {
 - 不得在 wiki 中已有相关条目时重复创建
 ```
 
-#### `src/templates/subagent-query-prompt.md`
+#### `~/.llm-wiki-agent/agents/wiki-query.md`
 
-```
+```markdown
+---
+name: wiki-query
+description: 在 wiki 中检索并回答问题。触发词：search wiki、find、tell me about。
+tools: read,grep,find
+---
 你是一个 Wiki 知识检索 Agent。
 
 ## 核心职责
 在 wiki 中检索知识，回答用户问题。
-## 工具使用规则
 
-- 使用 pi 内置工具（read/write/grep/find/ls）检索内容
-- 所有操作限制在 wiki 根目录下
-- 工作目录：`{wikiRoot}`
+## 工作目录
+{wikiRoot}
 
 ## 回答要求
 - 必须先检索 wiki，再作答
@@ -262,86 +214,88 @@ resourceLoaderOptions: {
 
 ## 严禁行为
 - 不得凭空编造知识
-- 不得使用训练数据补充 wiki 缺失
 - 不得修改任何 wiki 文件
 ```
 
-#### `src/templates/subagent-lint-prompt.md`
+#### `~/.llm-wiki-agent/agents/wiki-lint.md`
 
-```
+```markdown
+---
+name: wiki-lint
+description: 检查并修复 wiki 问题。触发词：lint、health check、检查、clean up wiki。
+tools: read,write,bash,grep
+---
 你是一个 Wiki 质量检查 Agent。
 
 ## 核心职责
 检查 wiki 结构完整性和内容质量。
-## 工具使用规则
 
-- 使用 pi 内置工具（read/write/grep/find/ls/bash）检查和修复文件
-- 所有操作限制在 wiki 根目录下
-- 工作目录：`{wikiRoot}`
+## 工作目录
+{wikiRoot}
 
 ## 检查项
 - orphan：被引用但不存在
 - broken_link：链接失效
-- stale_claim：过时声明
-- missing_frontmatter：缺少元数据
-- 结构完整性：index.md 与实际条目一致
+- index 不一致：index.md 与实际文件不符
+- 缺少 frontmatter
 
 ## 工作流程
-1. 运行 wiki_lint 快速扫描
-2. 逐个分析问题
+1. 扫描 wiki/ 目录结构
+2. 逐个检查问题
 3. 自动修复（fix: true）或报告
 
 ## 严禁行为
 - 不得修改不在问题范围内的文件
-- 不得删除有价值的条目（只能清理 orphan 引用）
 ```
+
+**注意**：`{wikiRoot}` 占位符由 subagent extension 在启动子进程时替换为实际路径。
 
 ## 文件变更
 
 ```diff
  src/
-+├── subagent.ts                          ← Subagent 进程运行逻辑（JSON 行流）
++├── cli.ts                              ← 支持 --role/--system-prompt 参数
 +├── core/
++│   ├── agent.ts                        ← WikiAgent.createSession() 支持 role
 +│   └── extensions/
-+│       └── dispatcher.ts                ← ExtensionFactory：wiki_dispatch 工具
-+├── templates/
-+│   ├── subagent-ingest-prompt.md        ← Ingest subagent system prompt
-+│   ├── subagent-query-prompt.md         ← Query subagent system prompt
-+│   └── subagent-lint-prompt.md          ← Lint subagent system prompt
-  ├── cli.ts                              ← 支持 --role/--query/--system-prompt 参数
-  └── core/
-      ├── agent.ts                        ← WikiAgent.createSession() 支持 role
-      └── runtime.ts                      ← createWikiSession 支持 role/systemPrompt
++│       └── wiki-subagent.ts            ← Subagent extension（spawn llm-wiki-agent 子进程）
+ ~/.llm-wiki-agent/
++├── agents/                             ← Subagent 定义文件
++│   ├── wiki-ingest.md                 ← Ingest subagent
++│   ├── wiki-query.md                  ← Query subagent
++│   └── wiki-lint.md                  ← Lint subagent
 ```
+
+**说明**：
+- `wiki-subagent.ts` 是基于 pi SDK subagent extension 改编的扩展，注册一个 `subagent` 工具
+- 子进程命令改为 `llm-wiki-agent --mode json --wiki <path> --append-system-prompt <file> <task>`
+- 发现路径改为 `~/.llm-wiki-agent/agents/`，而非默认的 `~/.pi/agent/agents/`
 
 ## 实现顺序
 
 | 步骤 | 内容 | 优先级 |
 |------|------|--------|
-| 1 | CLI 改造：支持 `--role/--query/--system-prompt` 参数 | P0 |
-| 2 | WikiAgent.createSession() 支持 `systemPrompt` + `role` + `tools` 参数 | P0 |
-| 3 | 创建 3 个 subagent system prompt 文件 | P0 |
-| 4 | `runSubagentMode()` 实现（JSON 行流输出） | P0 |
-| 5 | `wiki_dispatch` ExtensionFactory（分发工具） | P1 |
-| 6 | 主 agent 注册 dispatcher extension | P1 |
-| 7 | 测试：手动跑各 subagent 模式 | P2 |
-| 8 | 端到端测试：主 agent 分发任务 | P2 |
+| 1 | 创建 `~/.llm-wiki-agent/agents/` 下的 3 个 subagent 定义文件 | P0 |
+| 2 | CLI 改造：支持 `--role/--system-prompt-file` 参数 | P0 |
+| 3 | WikiAgent.createSession() 支持 `role` + `systemPrompt` | P0 |
+| 4 | `wiki-subagent.ts`：基于 pi subagent extension 改编的扩展 | P0 |
+| 5 | 主 agent 注册 wiki-subagent extension | P1 |
+| 6 | 测试：手动跑各 subagent 模式（`llm-wiki-agent --role ingest ...`） | P2 |
+| 7 | 端到端测试：主 agent 调用 subagent 工具分发任务 | P2 |
 
 ## 测试策略
 
 | 测试 | 方法 |
 |------|------|
-| CLI subagent 模式 | `llm-wiki-agent --wiki ~/wiki --role query --query "..."` 验证 JSON 行流 |
-| WikiAgent role 参数 | 单元测试：不同 role 创建的 session 有不同工具集 |
-| 分发工具 | E2E：主 agent 调用 wiki_dispatch，验证子进程输出被正确处理 |
+| CLI subagent 模式 | `llm-wiki-agent --role query --system-prompt-file <file>` 验证正常工作 |
+| Subagent extension | E2E：主 agent 调用 `subagent({ agent: "wiki-ingest", task: "..." })`，验证子进程输出被正确处理 |
 | 超时/取消 | 验证 AbortSignal 能正确终止子进程 |
 
 ## 源码参考
 
 | 模式 | 参考来源 |
 |------|---------|
-| ExtensionFactory | `~/data/github/pi-mono/packages/coding-agent/examples/extensions/subagent/index.ts` |
-| Subagent 进程管理 | 同上，`spawn` + stdout JSON 行解析 |
-| getPiInvocation | 同上，`getPiInvocation()` 检测运行时环境 |
-| SessionManager | `~/data/github/pi-mono/packages/coding-agent/src/core/session-manager.ts` |
-| openclaw 扩展机制 | `~/data/github/openclaw/src/agents/pi-embedded-runner/extensions.ts` |
+| Subagent extension | `~/data/github/pi-mono/packages/coding-agent/examples/extensions/subagent/index.ts` |
+| Agent 发现 | `~/data/github/pi-mono/packages/coding-agent/examples/extensions/subagent/agents.ts` |
+| spawn + JSON 行解析 | 同上，`runSingleAgent()` 中 `spawn` + stdout 解析 |
+| ExtensionFactory | `~/data/github/pi-mono/packages/coding-agent/docs/extensions.md` |

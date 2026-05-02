@@ -196,7 +196,10 @@ async function main() {
   console.error(`Wiki root: ${wikiRoot}`);
 }
 
-main().catch((err) => {
-  console.error("Fatal error:", err);
-  process.exit(1);
-});
+// Only start server when run directly (not when imported for testing)
+if (import.meta.main) {
+  main().catch((err) => {
+    console.error("Fatal error:", err);
+    process.exit(1);
+  });
+}

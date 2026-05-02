@@ -88,7 +88,6 @@ export class WikiAgent {
     const currentFile = fileURLToPath(import.meta.url);
     const repoRoot = join(currentFile, "../.."); // src/core/ -> 项目根
     const extensionsDir = join(repoRoot, "extensions");
-    const skillsDir = join(repoRoot, "skills");
 
     const wikiSlug = slugify(wikiRoot.split("/").pop() || "wiki");
     const sessionDir = getSessionDir(wikiSlug);
@@ -118,11 +117,7 @@ export class WikiAgent {
           extensionFactories,
         }),
 
-        // Skills 使用 additionalSkillPaths（SDK 能正确处理目录）
-        ...(existsSync(skillsDir) && !role && {
-          additionalSkillPaths: [skillsDir],
-        }),
-
+        // Skills 暂不支持自定义目录
         appendSystemPrompt: [
           ...this.systemPromptLines,
           ...(extraPrompts ?? []),

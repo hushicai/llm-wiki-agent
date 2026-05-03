@@ -6,7 +6,7 @@ import {
   createAgentSessionServices,
   SessionManager,
 } from "@mariozechner/pi-coding-agent";
-import type { AgentSessionServices } from "@mariozechner/pi-coding-agent";
+import type { AgentSessionServices, ToolDefinition } from "@mariozechner/pi-coding-agent";
 import type { CreateAgentSessionRuntimeFactory } from "@mariozechner/pi-coding-agent";
 import type { Model } from "@mariozechner/pi-ai";
 import { readFileSync } from "fs";
@@ -27,20 +27,84 @@ export interface CreateSessionOptions {
   role?: string;
   /** Additional system prompt content to append */
   appendSystemPrompt?: string[];
-  /** Restrict to specific SDK built-in tool names (e.g. ["read","bash","grep"]) */
+  /** 工具名允许列表。可混合内置工具名（read/bash/edit/write/grep/find/ls）和自定义工具名（subagent）。
+   *  解析后自动分离：内置工具名传入 SDK `tools` 字段，自定义工具名映射为 `customTools` 定义。
+   *  如果全为自定义工具（无内置工具），自动传入 `noTools: "builtin"` 禁用内置工具。
+   *  空/undefined 时使用 SDK 全量默认内置工具。 */
   allowedTools?: string[];
 }
 
-// === Subagent prompt loading ===
+// 已知的 SDK 内置工具名
+const BUILT_IN_TOOLS = new Set([
+  "read", "bash", "edit", "write", "grep", "find", "ls",
+]);
 
-function loadMainAgentPrompt(): string | undefined {
+// 自定义工具注册表：名称 → 工厂函数
+const CUSTOM_TOOL_FACTORIES: Record<string, (wikiRoot: string) => ToolDefinition> = {
+  subagent: createSubagentTool,
+};
+
+// === Tool config 解析 ===
+
+interface ResolvedTools {
+  builtin?: string[];
+  custom?: ToolDefinition[];
+  noBuiltin: boolean;
+}
+
+/**
+ * 从工具名列表中分离内置工具名和自定义工具名，生成 SDK 配置。
+ * @param names 工具名列表（来自 frontmatter 或 CLI）
+ * @param wikiRoot wiki 根路径（自定义工具工厂需要）
+ */
+function resolveToolConfig(names: string[] | undefined, wikiRoot: string): ResolvedTools {
+  if (!names || names.length === 0) {
+    return { noBuiltin: false };
+  }
+
+  const builtin: string[] = [];
+  const custom: ToolDefinition[] = [];
+
+  for (const name of names) {
+    if (BUILT_IN_TOOLS.has(name)) {
+      builtin.push(name);
+    } else {
+      const factory = CUSTOM_TOOL_FACTORIES[name];
+      if (factory) {
+        custom.push(factory(wikiRoot));
+      }
+    }
+  }
+
+  return {
+    ...(builtin.length > 0 ? { builtin } : {}),
+    ...(custom.length > 0 ? { custom } : {}),
+    noBuiltin: builtin.length === 0,
+  };
+}
+
+// === Agent prompt 加载 ===
+
+interface AgentConfig {
+  systemPrompt: string | undefined;
+  tools: string[] | undefined;
+}
+
+function loadMainAgentConfig(): AgentConfig {
   const repoRoot = getRepoRoot();
   const promptPath = join(repoRoot, "dispatcher/prompt.md");
   try {
     const content = readFileSync(promptPath, "utf-8");
-    return `\n${content}\n`; // SDK expects string, add padding like the old template
+    const { frontmatter, body } = parseFrontmatter(content);
+    const tools = frontmatter.tools
+      ? String(frontmatter.tools).split(",").map((t: string) => t.trim()).filter(Boolean)
+      : undefined;
+    return {
+      systemPrompt: `\n${body}\n`,
+      tools,
+    };
   } catch {
-    return undefined;
+    return { systemPrompt: undefined, tools: undefined };
   }
 }
 
@@ -51,7 +115,6 @@ function loadSubagentPrompt(role: string, wikiRoot?: string): string | undefined
   try {
     const content = readFileSync(filePath, "utf-8");
     const { body } = parseFrontmatter(content);
-    // Replace {wikiRoot} placeholder with actual wiki path
     if (wikiRoot) {
       return body.replace(/\{wikiRoot\}/g, wikiRoot);
     }
@@ -73,42 +136,39 @@ export class WikiAgent {
   }
 
   async createSession(wikiRoot: string, options?: CreateSessionOptions) {
-    const { role, appendSystemPrompt: extraPrompts } = options ?? {};
+    const { role, appendSystemPrompt: extraPrompts, allowedTools } = options ?? {};
+    const isMain = !role;
 
     const wikiSlug = slugify(wikiRoot.split("/").pop() || "wiki");
     const sessionDir = getSessionDir(wikiSlug);
     const sessionManager = SessionManager.create(wikiRoot, sessionDir);
 
+    // 主 agent 从 dispatcher/prompt.md frontmatter 读取工具配置
+    const mainConfig = isMain ? loadMainAgentConfig() : null;
+
+    // 工具列表来源优先级：CLI allowedTools > 主 agent frontmatter > undefined
+    const toolNames = allowedTools ?? mainConfig?.tools;
+
     const svc = await createAgentSessionServices({
       cwd: wikiRoot,
       agentDir: this.agentDir,
       resourceLoaderOptions: {
-        // 关闭 SDK 自动发现
         noExtensions: true,
         noSkills: true,
 
-        // CLI --append-system-prompt 追加到 dispatcher prompt 末尾
         ...(extraPrompts && extraPrompts.length > 0 && {
           appendSystemPrompt: extraPrompts,
         }),
 
-        // 主 agent（role 为空）：显式加载 dispatcher prompt
-        ...(function () {
-          const mainPrompt = loadMainAgentPrompt();
-          if (mainPrompt && !role) {
-            return { systemPrompt: mainPrompt };
-          }
-          return undefined;
-        })(),
+        // 主 agent：加载 dispatcher prompt（去掉 frontmatter）
+        ...(mainConfig?.systemPrompt ? { systemPrompt: mainConfig.systemPrompt } : {}),
 
         ...(role && {
-          // Subagent 模式：禁用所有 extension，传入自定义 system prompt
           systemPrompt: loadSubagentPrompt(role, wikiRoot),
         }),
       },
     });
 
-    // Cache model info for getModels()
     if (!this.cachedModels) {
       this.cachedModels = svc.modelRegistry.getAvailable().map((m: Model<any>) => ({
         id: m.id,
@@ -117,16 +177,22 @@ export class WikiAgent {
       }));
     }
 
-    // Fire-and-forget context window probe
     this.probeContextWindows(svc);
 
     const runtime = await createAgentSessionRuntime(
       async (opts: Parameters<CreateAgentSessionRuntimeFactory>[0]) => {
-        const toolOpts = !role
-          ? { noTools: "builtin" as const, customTools: [createSubagentTool(wikiRoot)] }
-          : options?.allowedTools
-            ? { tools: options.allowedTools }
-            : {};
+        const resolved = resolveToolConfig(toolNames, wikiRoot);
+
+        const toolOpts: {
+          tools?: string[];
+          customTools?: ToolDefinition[];
+          noTools?: "builtin";
+        } = {
+          ...(resolved.builtin ? { tools: resolved.builtin } : {}),
+          ...(resolved.custom ? { customTools: resolved.custom } : {}),
+          ...(resolved.noBuiltin ? { noTools: "builtin" as const } : {}),
+        };
+
         const result = await createAgentSession({
           ...opts,
           agentDir: this.agentDir,
@@ -173,22 +239,15 @@ export class WikiAgent {
           "Content-Type": "application/json",
         };
         if (auth.apiKey) headers["Authorization"] = `Bearer ${auth.apiKey}`;
-        const response = await fetch(url, {
-          headers,
-          signal: AbortSignal.timeout(1000),
-        });
+        const response = await fetch(url, { headers, signal: AbortSignal.timeout(1000) });
         if (!response.ok) continue;
         const data = (await response.json()) as { data?: Array<{ id: string; meta?: { context_length?: number }; context_window?: number }> };
         const modelList = data?.data ?? [];
         for (const entry of modelList) {
-          const ctxLen =
-            entry?.meta?.context_length ?? entry?.context_window;
+          const ctxLen = entry?.meta?.context_length ?? entry?.context_window;
           if (!ctxLen) continue;
           const match = list.find((m: Model<any>) => m.id === entry.id);
-          if (
-            match &&
-            (!match.contextWindow || match.contextWindow === DEFAULT_CTX)
-          ) {
+          if (match && (!match.contextWindow || match.contextWindow === DEFAULT_CTX)) {
             (match as Model<any> & { contextWindow: number }).contextWindow = ctxLen;
           }
         }

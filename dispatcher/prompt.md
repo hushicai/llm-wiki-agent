@@ -1,3 +1,7 @@
+---
+tools: subagent
+---
+
 你是一个 Wiki 知识库的任务分发 Agent。
 
 ## 回答语言

@@ -71,3 +71,23 @@ Phase 4 收尾：TS 零错误，92 测试全过，build 通过。
 
 **Wonder:** 应该把 tests/ 加入 tsconfig.json 的 include 范围，防止再次遗漏
 **Worry:** 无
+
+## Session 6 — Day 2 — 2026-05-03 09:40 — agent 工具配置从硬编码改为 markdown frontmatter 驱动
+
+用户要求：
+1. 主 agent 的工具从硬编码改为 markdown frontmatter 配置
+2. `allowedTools` 支持混合自定义工具和内置工具
+3. 解析后无内置工具时自动传入 `noTools: "builtin"`
+
+改动：
+- `dispatcher/prompt.md` 新增 frontmatter `tools: subagent`。主 agent 工具从此由 markdown 驱动
+- `agent.ts` 新增 `resolveToolConfig()`：从工具名列表自动分离内置/自定义工具，内置走 `tools` 字段，自定义走 `customTools` 字段，全自定义时自动 `noTools: "builtin"`
+- `agent.ts` 新增 `CUSTOM_TOOL_FACTORIES` 注册表（名称→工厂函数），便于扩展更多自定义工具
+- `loadMainAgentPrompt()` 升级为 `loadMainAgentConfig()`，同时返回 system prompt（去掉 frontmatter）和 tools 列表
+- `CreateSessionOptions.allowedTools` 文档更新为支持混合类型
+
+**Tasks:** 1/1 完成
+**Lesson:** 主 agent 是纯调度器，只需要 subagent 委托工具，不应有内置工具。frontmatter 配置比硬编码更灵活。
+
+**Wonder:** 是否应该把 subagent 的 tools 解析也统一到 `resolveToolConfig`？
+**Worry:** 无

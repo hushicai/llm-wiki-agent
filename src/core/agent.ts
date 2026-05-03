@@ -13,9 +13,9 @@ import { readFileSync } from "fs";
 import { join } from "path";
 import { getAgentDir, getSessionDir, slugify } from "./config.js";
 import { getRepoRoot } from "../utils/resolve.js";
-import { createSubagentTool } from "../tools/subagent.js";
 import { parseFrontmatter } from "../utils/frontmatter.js";
-import { allToolNames } from "../../node_modules/@mariozechner/pi-coding-agent/dist/core/tools/index.js";
+import { customToolFactories } from "../tools/index.js";
+
 
 export interface ModelInfo {
   id: string;
@@ -28,24 +28,21 @@ export interface CreateSessionOptions {
   role?: string;
   /** Additional system prompt content to append */
   appendSystemPrompt?: string[];
-  /** 工具名允许列表。可混合内置工具名（SDK 内置：read/bash/edit/write/grep/find/ls）和自定义工具名（subagent）。
-   *  自定义工具名 → 自动映射为 `customTools` 定义；其余全作为内置工具名传入 `tools` 字段。
+  /** 工具名允许列表。可混合 SDK 内置工具名（read/bash/edit/write/grep/find/ls）和自定义工具名。
+   *  工具名在 CUSTOM_TOOL_NAMES 中 → 通过工厂生成 ToolDefinition，传入 `customTools`。
+   *  不在 CUSTOM_TOOL_NAMES 中 → 直接作为内置工具名传入 `tools` 字段。
    *  如果解析后无内置工具名，自动传入 `noTools: "builtin"` 禁用内置工具。
    *  空/undefined 时使用 SDK 全量默认内置工具。 */
   allowedTools?: string[];
 }
 
-// SDK 内置工具名（来自 @mariozechner/pi-coding-agent 的 allToolNames）
-const BUILT_IN_TOOLS: ReadonlySet<string> = allToolNames;
+// 自定义工具名集合：从注册表自动发现，不人工维护
+const CUSTOM_TOOL_NAMES: ReadonlySet<string> = new Set(Object.keys(customToolFactories));
 
-// 自定义工具工厂：名称 → (wikiRoot) => ToolDefinition
+// 自定义工具工厂：从注册表查找
 function createCustomTool(name: string, wikiRoot: string): ToolDefinition | undefined {
-  switch (name) {
-    case "subagent":
-      return createSubagentTool(wikiRoot);
-    default:
-      return undefined;
-  }
+  const factory = customToolFactories[name];
+  return factory ? factory(wikiRoot) : undefined;
 }
 
 // === Tool config 解析 ===
@@ -58,8 +55,8 @@ interface ResolvedTools {
 
 /**
  * 从工具名列表中分离内置和自定义工具。
- * 在 BUILT_IN_TOOLS 中的 → 内置工具，传入 `tools` 字段。
- * 不在 BUILT_IN_TOOLS 中的 → 自定义工具，通过工厂生成 ToolDefinition 传入 `customTools`。
+ * 在 CUSTOM_TOOL_NAMES 中的 → 自定义工具，通过工厂生成 ToolDefinition 传入 `customTools`。
+ * 不在 CUSTOM_TOOL_NAMES 中的 → 内置工具，直接传入 `tools` 字段。
  */
 function resolveToolConfig(names: string[] | undefined, wikiRoot: string): ResolvedTools {
   if (!names || names.length === 0) {
@@ -70,11 +67,11 @@ function resolveToolConfig(names: string[] | undefined, wikiRoot: string): Resol
   const custom: ToolDefinition[] = [];
 
   for (const name of names) {
-    if (BUILT_IN_TOOLS.has(name)) {
-      builtin.push(name);
-    } else {
+    if (CUSTOM_TOOL_NAMES.has(name)) {
       const def = createCustomTool(name, wikiRoot);
       if (def) custom.push(def);
+    } else {
+      builtin.push(name);
     }
   }
 

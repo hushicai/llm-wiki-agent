@@ -15,6 +15,7 @@ import { getAgentDir, getSessionDir, slugify } from "./config.js";
 import { getRepoRoot } from "../utils/resolve.js";
 import { createSubagentTool } from "../tools/subagent.js";
 import { parseFrontmatter } from "../utils/frontmatter.js";
+import { allToolNames } from "../../node_modules/@mariozechner/pi-coding-agent/dist/core/tools/index.js";
 
 export interface ModelInfo {
   id: string;
@@ -34,8 +35,8 @@ export interface CreateSessionOptions {
   allowedTools?: string[];
 }
 
-// 已知的自定义工具名（在代码中创建，非 SDK 内置）
-const CUSTOM_TOOL_NAMES = new Set(["subagent"]);
+// SDK 内置工具名（来自 @mariozechner/pi-coding-agent 的 allToolNames）
+const BUILT_IN_TOOLS: ReadonlySet<string> = allToolNames;
 
 // 自定义工具工厂：名称 → (wikiRoot) => ToolDefinition
 function createCustomTool(name: string, wikiRoot: string): ToolDefinition | undefined {
@@ -57,7 +58,8 @@ interface ResolvedTools {
 
 /**
  * 从工具名列表中分离内置和自定义工具。
- * 通过 CUSTOM_TOOL_NAMES 识别自定义工具，其余全当作 SDK 内置工具名。
+ * 在 BUILT_IN_TOOLS 中的 → 内置工具，传入 `tools` 字段。
+ * 不在 BUILT_IN_TOOLS 中的 → 自定义工具，通过工厂生成 ToolDefinition 传入 `customTools`。
  */
 function resolveToolConfig(names: string[] | undefined, wikiRoot: string): ResolvedTools {
   if (!names || names.length === 0) {
@@ -68,11 +70,11 @@ function resolveToolConfig(names: string[] | undefined, wikiRoot: string): Resol
   const custom: ToolDefinition[] = [];
 
   for (const name of names) {
-    if (CUSTOM_TOOL_NAMES.has(name)) {
+    if (BUILT_IN_TOOLS.has(name)) {
+      builtin.push(name);
+    } else {
       const def = createCustomTool(name, wikiRoot);
       if (def) custom.push(def);
-    } else {
-      builtin.push(name);
     }
   }
 

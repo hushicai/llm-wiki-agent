@@ -6,6 +6,9 @@ import {
   createAgentSessionServices,
   SessionManager,
 } from "@mariozechner/pi-coding-agent";
+import type { AgentSessionServices } from "@mariozechner/pi-coding-agent";
+import type { CreateAgentSessionRuntimeFactory } from "@mariozechner/pi-coding-agent";
+import type { Model } from "@mariozechner/pi-ai";
 import { readFileSync } from "fs";
 import { join } from "path";
 import { getAgentDir, getSessionDir, slugify } from "./config.js";
@@ -107,7 +110,7 @@ export class WikiAgent {
 
     // Cache model info for getModels()
     if (!this.cachedModels) {
-      this.cachedModels = svc.modelRegistry.getAvailable().map((m: any) => ({
+      this.cachedModels = svc.modelRegistry.getAvailable().map((m: Model<any>) => ({
         id: m.id,
         provider: m.provider,
         contextWindow: m.contextWindow,
@@ -118,7 +121,7 @@ export class WikiAgent {
     this.probeContextWindows(svc);
 
     const runtime = await createAgentSessionRuntime(
-      async (opts: any) => {
+      async (opts: Parameters<CreateAgentSessionRuntimeFactory>[0]) => {
         const toolOpts = !role
           ? { noTools: "builtin" as const, customTools: [createSubagentTool(wikiRoot)] }
           : options?.allowedTools
@@ -144,7 +147,7 @@ export class WikiAgent {
     return this.cachedModels ?? [];
   }
 
-  private async probeContextWindows(svc: any): Promise<void> {
+  private async probeContextWindows(svc: AgentSessionServices): Promise<void> {
     const DEFAULT_CTX = 128000;
     const registry = svc.modelRegistry;
     const models = registry.getAvailable();
@@ -175,18 +178,18 @@ export class WikiAgent {
           signal: AbortSignal.timeout(1000),
         });
         if (!response.ok) continue;
-        const data = (await response.json()) as any;
-        const modelList: any[] = data?.data ?? [];
+        const data = (await response.json()) as { data?: Array<{ id: string; meta?: { context_length?: number }; context_window?: number }> };
+        const modelList = data?.data ?? [];
         for (const entry of modelList) {
           const ctxLen =
             entry?.meta?.context_length ?? entry?.context_window;
           if (!ctxLen) continue;
-          const match = list.find((m: any) => m.id === entry.id);
+          const match = list.find((m: Model<any>) => m.id === entry.id);
           if (
             match &&
             (!match.contextWindow || match.contextWindow === DEFAULT_CTX)
           ) {
-            (match as any).contextWindow = ctxLen;
+            (match as Model<any> & { contextWindow: number }).contextWindow = ctxLen;
           }
         }
       } catch {

@@ -7,6 +7,7 @@ import { WikiAgent } from "../src/core/agent.js";
 import { WebSessionManager } from "../src/server/session.js";
 import { ensureWiki } from "../src/core/init.js";
 import { parseServerArgs } from "../src/server.js";
+import type { AgentSessionEvent, AgentSessionRuntime } from "@mariozechner/pi-coding-agent";
 
 const testDir = join(tmpdir(), "llm-wiki-agent-server-test");
 const wikiRoot = join(testDir, "wiki");
@@ -25,7 +26,7 @@ function startTestServer(port: number) {
       try {
         // POST /api/chat
         if (url.pathname === "/api/chat" && req.method === "POST") {
-          const body = (await req.json()) as any;
+          const body = (await req.json()) as { message?: string };
           if (!body.message) {
             return new Response(JSON.stringify({ error: "message is required" }), {
               status: 400,
@@ -43,7 +44,7 @@ function startTestServer(port: number) {
                 if (!closed) controller.enqueue(encoder.encode(`data: ${data}\n\n`));
               };
 
-              const unsubscribe = runtime.session.subscribe((event: any) => {
+              const unsubscribe = runtime.session.subscribe((event: AgentSessionEvent) => {
                 if (event.type === "message_update" && event.assistantMessageEvent?.type === "text_delta") {
                   send(JSON.stringify({ type: "delta", content: event.assistantMessageEvent.delta }));
                 } else if (event.type === "message_end") {
@@ -52,7 +53,7 @@ function startTestServer(port: number) {
               });
 
               send(JSON.stringify({ type: "session_id", id }));
-              runtime.session.prompt(body.message).catch((err: Error) => {
+              runtime.session.prompt(body.message ?? "").catch((err: Error) => {
                 send(JSON.stringify({ type: "error", message: err.message }));
               }).finally(() => {
                 unsubscribe();
@@ -74,8 +75,9 @@ function startTestServer(port: number) {
         }
 
         return new Response("Not Found", { status: 404 });
-      } catch (err: any) {
-        return new Response(JSON.stringify({ error: err.message }), {
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err);
+        return new Response(JSON.stringify({ error: message }), {
           status: 500,
           headers: { "Content-Type": "application/json" },
         });
@@ -130,11 +132,11 @@ describe("HTTP Server", () => {
   test("POST /api/chat returns SSE stream", async () => {
     // Mock the session to fire events synchronously in subscribe
     const mockSession = {
-      subscribe: (handler: (event: any) => void) => {
+      subscribe: (handler: (event: AgentSessionEvent) => void) => {
         // Fire all expected events synchronously
-        handler({ type: "message_update", assistantMessageEvent: { type: "text_delta", delta: "你好" } });
-        handler({ type: "message_update", assistantMessageEvent: { type: "text_delta", delta: "！" } });
-        handler({ type: "message_end" });
+        handler({ type: "message_update", assistantMessageEvent: { type: "text_delta" as const, contentIndex: 0, delta: "你好", partial: {} as any } } as unknown as AgentSessionEvent);
+        handler({ type: "message_update", assistantMessageEvent: { type: "text_delta" as const, contentIndex: 0, delta: "！", partial: {} as any } } as unknown as AgentSessionEvent);
+        handler({ type: "message_end", message: { role: "assistant", content: [], timestamp: Date.now() } } as unknown as AgentSessionEvent);
         return () => {};
       },
       prompt: async (_msg: string) => {
@@ -146,7 +148,7 @@ describe("HTTP Server", () => {
     const session_id = crypto.randomUUID();
     sessionManager.create = async () => ({
       id: session_id,
-      runtime: { session: mockSession },
+      runtime: { session: mockSession } as unknown as AgentSessionRuntime,
     });
 
     const res = await fetch(`http://localhost:${port}/api/chat`, {

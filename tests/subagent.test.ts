@@ -3,7 +3,7 @@ import { describe, expect, test, beforeAll, afterAll } from "bun:test";
 import { mkdtempSync, writeFileSync, mkdirSync, rmSync, existsSync } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
-import { loadAgentsFromDir, discoverAgents, agentNameToRole } from "../src/tools/subagent.js";
+import { loadAgentsFromDir, discoverAgents, agentNameToRole, type AgentConfig } from "../src/tools/subagent.js";
 
 let tmpDir: string;
 
@@ -117,7 +117,7 @@ Body B`,
     );
     const agents = loadAgentsFromDir(dir);
     expect(agents).toHaveLength(2);
-    expect(agents.map((a: any) => a.name).sort()).toEqual(["agent-a", "agent-b"]);
+    expect(agents.map((a: AgentConfig) => a.name).sort()).toEqual(["agent-a", "agent-b"]);
   });
 });
 

@@ -173,7 +173,7 @@ async function runSingleAgent(
 
     const processLine = (line: string) => {
       if (!line.trim()) return;
-      let event: any;
+      let event: Record<string, unknown>;
       try {
         event = JSON.parse(line);
       } catch {

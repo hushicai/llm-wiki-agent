@@ -6,6 +6,8 @@ import { ensureWiki } from "./core/init.js";
 import { join, extname } from "path";
 import { readFile } from "fs/promises";
 import { existsSync } from "fs";
+import type { AgentSessionRuntime } from "@mariozechner/pi-coding-agent";
+import type { AgentSessionEvent } from "@mariozechner/pi-coding-agent";
 
 const MIME_TYPES: Record<string, string> = {
   ".html": "text/html; charset=utf-8",
@@ -69,8 +71,8 @@ async function main() {
       try {
         // POST /api/chat — SSE streaming
         if (url.pathname === "/api/chat" && req.method === "POST") {
-          const body = (await req.json()) as any;
-          const message = body.message;
+          const body = (await req.json()) as { message?: string; session_id?: string };
+          const message: unknown = body.message;
           const sessionId = body.session_id;
 
           if (!message || typeof message !== "string") {
@@ -84,7 +86,7 @@ async function main() {
           }
 
           // Get or create session
-          let runtime: any;
+          let runtime: AgentSessionRuntime | undefined;
           let sid = sessionId;
           if (sid) {
             runtime = sessionManager.get(sid);
@@ -108,7 +110,7 @@ async function main() {
               };
 
               // Subscribe to agent events
-              const unsubscribe = runtime.session.subscribe((event: any) => {
+              const unsubscribe = runtime.session.subscribe((event: AgentSessionEvent) => {
                 if (
                   event.type === "message_update" &&
                   event.assistantMessageEvent?.type === "text_delta"
@@ -183,8 +185,9 @@ async function main() {
         const mime =
           MIME_TYPES[extname(filePath)] || "application/octet-stream";
         return new Response(content, { headers: { "Content-Type": mime } });
-      } catch (err: any) {
-        return new Response(JSON.stringify({ error: err.message }), {
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err);
+        return new Response(JSON.stringify({ error: message }), {
           status: 500,
           headers: { "Content-Type": "application/json" },
         });

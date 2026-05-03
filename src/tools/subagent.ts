@@ -20,7 +20,6 @@ import { parseFrontmatter } from "../utils/frontmatter.js";
 export interface AgentConfig {
   name: string;
   description: string;
-  tools?: string[];
   model?: string;
   systemPrompt: string;
   filePath: string;
@@ -50,14 +49,9 @@ export function loadAgentsFromDir(dir: string): AgentConfig[] {
     const { frontmatter, body } = parseFrontmatter(content);
     const fm = frontmatter as Record<string, string>;
     if (!fm.name || !fm.description) continue;
-    const tools = fm.tools
-      ?.split(",")
-      .map((t: string) => t.trim())
-      .filter(Boolean);
     agents.push({
       name: fm.name,
       description: fm.description,
-      tools: tools && tools.length > 0 ? tools : undefined,
       model: fm.model,
       systemPrompt: body,
       filePath,
@@ -145,11 +139,6 @@ async function runSingleAgent(
   // Pass role to load agent prompt + prevent subagent tool registration
   const role = agentNameToRole(agent.name);
   args.push("--role", role);
-
-  // Restrict tools based on agent definition
-  if (agent.tools && agent.tools.length > 0) {
-    args.push("--tools", agent.tools.join(","));
-  }
 
   args.push(task);
 

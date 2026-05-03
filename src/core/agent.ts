@@ -107,19 +107,23 @@ function loadMainAgentConfig(): AgentConfig {
   }
 }
 
-function loadSubagentPrompt(role: string, wikiRoot?: string): string | undefined {
+function loadSubagentConfig(role: string, wikiRoot?: string): AgentConfig {
   const repoRoot = getRepoRoot();
   const agentsDir = join(repoRoot, "agents");
   const filePath = join(agentsDir, `wiki-${role}.md`);
   try {
     const content = readFileSync(filePath, "utf-8");
-    const { body } = parseFrontmatter(content);
+    const { frontmatter, body } = parseFrontmatter(content);
+    const tools = frontmatter.tools
+      ? String(frontmatter.tools).split(",").map((t: string) => t.trim()).filter(Boolean)
+      : undefined;
+    let systemPrompt: string = `\n${body}\n`;
     if (wikiRoot) {
-      return body.replace(/\{wikiRoot\}/g, wikiRoot);
+      systemPrompt = systemPrompt.replace(/\{wikiRoot\}/g, wikiRoot);
     }
-    return body;
+    return { systemPrompt, tools };
   } catch {
-    return undefined;
+    return { systemPrompt: undefined, tools: undefined };
   }
 }
 
@@ -142,11 +146,11 @@ export class WikiAgent {
     const sessionDir = getSessionDir(wikiSlug);
     const sessionManager = SessionManager.create(wikiRoot, sessionDir);
 
-    // 主 agent 从 dispatcher/prompt.md frontmatter 读取工具配置
-    const mainConfig = isMain ? loadMainAgentConfig() : null;
+    // 加载 agent 配置：主 agent 从 dispatcher/prompt.md，子 agent 从 agents/wiki-{role}.md
+    const agentConfig = isMain ? loadMainAgentConfig() : loadSubagentConfig(role!, wikiRoot);
 
-    // 工具列表来源优先级：CLI allowedTools > 主 agent frontmatter > undefined
-    const toolNames = allowedTools ?? mainConfig?.tools;
+    // 工具列表来源优先级：CLI allowedTools > agent frontmatter tools > undefined
+    const toolNames = allowedTools ?? agentConfig.tools;
 
     const svc = await createAgentSessionServices({
       cwd: wikiRoot,
@@ -159,12 +163,7 @@ export class WikiAgent {
           appendSystemPrompt: extraPrompts,
         }),
 
-        // 主 agent：加载 dispatcher prompt（去掉 frontmatter）
-        ...(mainConfig?.systemPrompt ? { systemPrompt: mainConfig.systemPrompt } : {}),
-
-        ...(role && {
-          systemPrompt: loadSubagentPrompt(role, wikiRoot),
-        }),
+        ...(agentConfig.systemPrompt ? { systemPrompt: agentConfig.systemPrompt } : {}),
       },
     });
 

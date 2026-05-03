@@ -69,7 +69,6 @@ Prompt body here`,
     expect(agents[0].name).toBe("wiki-ingest");
     expect(agents[0].description).toBe("Ingest content into wiki");
     expect(agents[0].systemPrompt.trim()).toBe("Prompt body here");
-    expect(agents[0].tools).toBeUndefined();
     expect(agents[0].model).toBeUndefined();
   });
 
@@ -88,7 +87,6 @@ Query instructions`,
     );
     const agents = loadAgentsFromDir(dir);
     expect(agents).toHaveLength(1);
-    expect(agents[0].tools).toEqual(["read", "search"]);
     expect(agents[0].model).toBe("gpt-4");
   });
 

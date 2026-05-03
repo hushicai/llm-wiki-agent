@@ -55,3 +55,19 @@ Phase 4 收尾：TS 零错误，92 测试全过，build 通过。
 
 **Wonder:** 其他源文件是否还有隐式类型问题未被 tsc 捕获？
 **Worry:** lint 仍然没有 eslint 配置，需要单独配置。
+
+## Session 4 — Day 2 — 2026-05-03 08:55 — 修复 test 文件 TS 类型错误
+
+用户指正：TS 类型要全仓库修复。上一轮只修了 `src/`，遗漏了 `tests/`。
+
+新发现的 5 个错误：
+- `tests/extensions.test.ts` ×4 — 同 `subagent.ts`，`execute` 缺 `details`（1 个还缺第 5 参 `_ctx`）
+- `tests/server.test.ts` ×1 — `server.port` 是 `number | undefined`，不能直接赋给 `port: number`
+
+全部修复后 TS 零错误（含 `src/` + `tests/`），92 测试全过。
+
+**Tasks:** 1/1 完成
+**Lesson:** 检查 TS 错误时要指定 `--project tsconfig.json`（只检查 src/），如果测试文件也需要检查，要显式 include 或用 `--module esnext --target es2022` 独立检查 tests/。
+
+**Wonder:** 应该把 tests/ 加入 tsconfig.json 的 include 范围，防止再次遗漏
+**Worry:** 无

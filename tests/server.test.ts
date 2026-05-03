@@ -99,7 +99,7 @@ describe("HTTP Server", () => {
     agent = new WikiAgent();
     sessionManager = new WebSessionManager();
     server = startTestServer(0); // random port
-    port = server.port;
+    port = server.port ?? 0;
   });
 
   afterAll(async () => {

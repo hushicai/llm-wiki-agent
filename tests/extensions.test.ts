@@ -37,8 +37,8 @@ describe("Extensions support", () => {
             },
             required: ["name"],
           },
-          execute: async (toolCallId, params) => {
-            return { content: [{ type: "text", text: `Hello, ${params.name}!` }] };
+          execute: async (toolCallId, params, _signal, _onUpdate, _ctx) => {
+            return { content: [{ type: "text", text: `Hello, ${params.name}!` }], details: undefined };
           },
         });
       };
@@ -69,7 +69,7 @@ describe("Extensions support", () => {
           label: "Tool One",
           description: "First extension tool",
           parameters: { type: "object", properties: {} },
-          execute: async () => ({ content: [{ type: "text", text: "one" }] }),
+          execute: async () => ({ content: [{ type: "text", text: "one" }], details: undefined }),
         });
       };
 
@@ -79,7 +79,7 @@ describe("Extensions support", () => {
           label: "Tool Two",
           description: "Second extension tool",
           parameters: { type: "object", properties: {} },
-          execute: async () => ({ content: [{ type: "text", text: "two" }] }),
+          execute: async () => ({ content: [{ type: "text", text: "two" }], details: undefined }),
         });
       };
 
@@ -136,7 +136,7 @@ describe("Extensions support", () => {
           label: "Blocked Tool",
           description: "This should not be loaded",
           parameters: { type: "object", properties: {} },
-          execute: async () => ({ content: [{ type: "text", text: "blocked" }] }),
+          execute: async () => ({ content: [{ type: "text", text: "blocked" }], details: undefined }),
         });
       };
 

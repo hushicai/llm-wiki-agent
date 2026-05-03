@@ -27,22 +27,25 @@ export interface CreateSessionOptions {
   role?: string;
   /** Additional system prompt content to append */
   appendSystemPrompt?: string[];
-  /** 工具名允许列表。可混合内置工具名（read/bash/edit/write/grep/find/ls）和自定义工具名（subagent）。
-   *  解析后自动分离：内置工具名传入 SDK `tools` 字段，自定义工具名映射为 `customTools` 定义。
-   *  如果全为自定义工具（无内置工具），自动传入 `noTools: "builtin"` 禁用内置工具。
+  /** 工具名允许列表。可混合内置工具名（SDK 内置：read/bash/edit/write/grep/find/ls）和自定义工具名（subagent）。
+   *  自定义工具名 → 自动映射为 `customTools` 定义；其余全作为内置工具名传入 `tools` 字段。
+   *  如果解析后无内置工具名，自动传入 `noTools: "builtin"` 禁用内置工具。
    *  空/undefined 时使用 SDK 全量默认内置工具。 */
   allowedTools?: string[];
 }
 
-// 已知的 SDK 内置工具名
-const BUILT_IN_TOOLS = new Set([
-  "read", "bash", "edit", "write", "grep", "find", "ls",
-]);
+// 已知的自定义工具名（在代码中创建，非 SDK 内置）
+const CUSTOM_TOOL_NAMES = new Set(["subagent"]);
 
-// 自定义工具注册表：名称 → 工厂函数
-const CUSTOM_TOOL_FACTORIES: Record<string, (wikiRoot: string) => ToolDefinition> = {
-  subagent: createSubagentTool,
-};
+// 自定义工具工厂：名称 → (wikiRoot) => ToolDefinition
+function createCustomTool(name: string, wikiRoot: string): ToolDefinition | undefined {
+  switch (name) {
+    case "subagent":
+      return createSubagentTool(wikiRoot);
+    default:
+      return undefined;
+  }
+}
 
 // === Tool config 解析 ===
 
@@ -53,9 +56,8 @@ interface ResolvedTools {
 }
 
 /**
- * 从工具名列表中分离内置工具名和自定义工具名，生成 SDK 配置。
- * @param names 工具名列表（来自 frontmatter 或 CLI）
- * @param wikiRoot wiki 根路径（自定义工具工厂需要）
+ * 从工具名列表中分离内置和自定义工具。
+ * 通过 CUSTOM_TOOL_NAMES 识别自定义工具，其余全当作 SDK 内置工具名。
  */
 function resolveToolConfig(names: string[] | undefined, wikiRoot: string): ResolvedTools {
   if (!names || names.length === 0) {
@@ -66,13 +68,11 @@ function resolveToolConfig(names: string[] | undefined, wikiRoot: string): Resol
   const custom: ToolDefinition[] = [];
 
   for (const name of names) {
-    if (BUILT_IN_TOOLS.has(name)) {
-      builtin.push(name);
+    if (CUSTOM_TOOL_NAMES.has(name)) {
+      const def = createCustomTool(name, wikiRoot);
+      if (def) custom.push(def);
     } else {
-      const factory = CUSTOM_TOOL_FACTORIES[name];
-      if (factory) {
-        custom.push(factory(wikiRoot));
-      }
+      builtin.push(name);
     }
   }
 

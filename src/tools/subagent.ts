@@ -4,9 +4,10 @@
 import { spawn } from "node:child_process";
 import * as fs from "node:fs";
 import * as path from "node:path";
-import type { ToolDefinition } from "@mariozechner/pi-coding-agent";
+import type { ExtensionContext, ToolDefinition } from "@mariozechner/pi-coding-agent";
 import type { AgentToolResult } from "@mariozechner/pi-agent-core";
-import type { Message } from "@mariozechner/pi-ai";
+import type { AssistantMessage } from "@mariozechner/pi-ai";
+import type { Static } from "typebox";
 import { Type } from "typebox";
 import {
   logSubagentStart,
@@ -105,7 +106,7 @@ interface SubagentResult {
   agent: string;
   task: string;
   exitCode: number;
-  messages: Message[];
+  messages: AssistantMessage[];
   stderr: string;
   errorMessage?: string;
   stopReason?: string;
@@ -180,12 +181,16 @@ async function runSingleAgent(
       }
 
       if (event.type === "message_end" && event.message) {
-        const msg = event.message as Message;
+        const msg = event.message as AssistantMessage;
         currentResult.messages.push(msg);
         if (msg.stopReason) currentResult.stopReason = msg.stopReason;
         if (msg.errorMessage) currentResult.errorMessage = msg.errorMessage;
+        const textContent = Array.isArray(msg.content)
+          ? msg.content.find((c): c is { type: "text"; text: string } => typeof c === "object" && "type" in c && c.type === "text")?.text ?? ""
+          : "";
         onUpdate?.({
-          content: [{ type: "text", text: msg.content?.[0]?.type === "text" ? msg.content[0].text : "" }],
+          content: [{ type: "text", text: textContent }],
+          details: undefined,
         });
       }
     };
@@ -254,25 +259,28 @@ export function createSubagentTool(wikiRoot: string): ToolDefinition {
     description: "Delegate tasks to specialized wiki subagents (wiki-ingest, wiki-query, wiki-lint).",
     parameters: SubagentParams,
 
-    async execute(_toolCallId, params, signal, onUpdate) {
+    async execute(_toolCallId, params, signal, onUpdate, _ctx) {
+      const p = params as Static<typeof SubagentParams>;
       const discovery = discoverAgents(wikiRoot);
       const agents = discovery.agents;
 
-      if (!params.agent || !params.task) {
+      if (!p.agent || !p.task) {
         const available = agents.map((a) => `"${a.name}"`).join(", ") || "none";
         return {
           content: [{ type: "text", text: `Usage: subagent({ agent: "name", task: "..." })\nAvailable: ${available}` }],
+          details: undefined,
         };
       }
 
-      const result = await runSingleAgent(wikiRoot, agents, params.agent, params.task, signal, onUpdate);
+      const result = await runSingleAgent(wikiRoot, agents, p.agent, p.task, signal, onUpdate);
 
       const isError = result.exitCode !== 0 || result.stopReason === "error";
       if (isError) {
         return {
           content: [{ type: "text", text: result.errorMessage || result.stderr || "Subagent failed" }],
           isError: true,
-        };
+          details: undefined,
+        } as AgentToolResult<unknown> & { isError: boolean };
       }
 
       // 提取最终文本输出
@@ -287,7 +295,7 @@ export function createSubagentTool(wikiRoot: string): ToolDefinition {
         }
       }
 
-      return { content: [{ type: "text", text: finalText || result.stderr || "(done)" }] };
+      return { content: [{ type: "text", text: finalText || result.stderr || "(done)" }], details: undefined };
     },
   };
 }
